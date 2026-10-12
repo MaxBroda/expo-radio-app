@@ -14,9 +14,11 @@ type ThemeState = {
 
 const ThemeContext = createContext<ThemeState | null>(null);
 
-export function ThemeProvider({ children }: PropsWithChildren) {
+type Props = PropsWithChildren<{ initialPreference?: ColorSchemePreference }>;
+
+export function ThemeProvider({ initialPreference = 'system', children }: Props) {
   const system = useColorScheme();
-  const [preference, setPreference] = useState<ColorSchemePreference>('system');
+  const [preference, setPreference] = useState(initialPreference);
   const scheme = preference === 'system' ? (system === 'light' ? 'light' : 'dark') : preference;
 
   return (
