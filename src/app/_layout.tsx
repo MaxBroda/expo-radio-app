@@ -1,12 +1,18 @@
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import {
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider as NavigationThemeProvider,
+} from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect, useState } from 'react';
 
 import { createStubStations } from '@/stations/stations';
 import { StationsProvider } from '@/stations/stations-provider';
-import { fontAssets, ThemeProvider, useColorSchemePreference } from '@/theme';
+import { fontAssets, ThemeProvider, useColorSchemePreference, useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,14 +30,41 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <StationsProvider stations={stations}>
-        <ThemedStatusBar />
-        <Stack screenOptions={{ headerShown: false }} />
+        <ThemedNavigation />
       </StationsProvider>
     </ThemeProvider>
   );
 }
 
-function ThemedStatusBar() {
+/** Everything behind the screens must use the theme too, or it shows through during swipe-back. */
+function ThemedNavigation() {
+  const colors = useTheme();
   const { scheme } = useColorSchemePreference();
-  return <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />;
+  const base = scheme === 'light' ? DefaultTheme : DarkTheme;
+
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(colors.bg.base);
+  }, [colors]);
+
+  return (
+    <NavigationThemeProvider
+      value={{
+        ...base,
+        colors: {
+          ...base.colors,
+          primary: colors.accent.base,
+          background: colors.bg.base,
+          card: colors.surface.default,
+          text: colors.text.default,
+          border: colors.line.default,
+          notification: colors.accent.base,
+        },
+      }}
+    >
+      <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
+      <Stack
+        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg.base } }}
+      />
+    </NavigationThemeProvider>
+  );
 }

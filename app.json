@@ -7,6 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "welle7",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0E0A14",
     "ios": {
       "icon": "./assets/expo.icon"
     },
