@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { fonts, radius, touchTarget, useTheme } from '@/theme';
+
+import { Tappable } from './tappable';
 
 type Props = {
   label: string;
@@ -34,15 +36,15 @@ export function Pill({ label, active = false, size = 'small', icon, onPress }: P
 
   const slop = Math.max(0, (touchTarget - height) / 2);
   return (
-    <Pressable
+    <Tappable
       onPress={onPress}
       hitSlop={slop}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      style={({ pressed }) => [styles.pill, { height }, surface, pressed && styles.pressed]}
+      style={[styles.pill, { height }, surface]}
     >
       {content}
-    </Pressable>
+    </Tappable>
   );
 }
 
@@ -55,7 +57,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.pill,
     paddingHorizontal: 11,
+    overflow: 'hidden',
   },
   label: { fontFamily: fonts.medium, fontSize: 12 },
-  pressed: { opacity: 0.8 },
 });
