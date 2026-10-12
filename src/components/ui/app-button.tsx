@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 
 import { fonts, radius, spacing, useTheme, type Colors } from '@/theme';
+
+import { Tappable } from './tappable';
 
 type Variant = 'primary' | 'secondary';
 type Size = 'regular' | 'compact';
@@ -44,19 +46,14 @@ export function AppButton({
   const colors = useTheme();
 
   return (
-    <Pressable
+    <Tappable
+      feedback={variant === 'primary' ? 'accent' : 'surface'}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [
-        styles.base,
-        styles[size],
-        surfaceStyle(colors, variant, disabled),
-        pressed && styles.pressed,
-        style,
-      ]}
+      style={[styles.base, styles[size], surfaceStyle(colors, variant, disabled), style]}
     >
       {icon}
       <Text
@@ -67,7 +64,7 @@ export function AppButton({
       >
         {label}
       </Text>
-    </Pressable>
+    </Tappable>
   );
 }
 
@@ -78,10 +75,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     borderWidth: 1,
+    overflow: 'hidden',
   },
   regular: { minHeight: 52, borderRadius: radius.md, paddingHorizontal: spacing.xl },
   compact: { minHeight: 44, borderRadius: radius.sm, paddingHorizontal: spacing.md },
-  pressed: { opacity: 0.8 },
   labelRegular: { fontFamily: fonts.semibold, fontSize: 16 },
   labelCompact: { fontFamily: fonts.semibold, fontSize: 13 },
 });
