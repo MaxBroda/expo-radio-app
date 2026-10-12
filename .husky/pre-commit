@@ -1,0 +1,8 @@
+npx --no-install lint-staged
+npm run typecheck
+
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner
+else
+  echo "gitleaks not installed, skipping local secret scan (CI still runs it)"
+fi
