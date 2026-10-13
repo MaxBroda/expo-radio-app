@@ -119,3 +119,34 @@ test('listener routes are closed to moderation', async () => {
   expect(app.getPathname()).not.toBe('/rate/track');
   expect(screen.queryByText('Playlist bewerten')).toBeNull();
 });
+
+test('demo states switch on, stay exclusive per connection and reset', async () => {
+  const user = setupUser();
+  await renderApp();
+  const pill = (name: string) => screen.getByRole('button', { name });
+
+  await user.press(screen.getByLabelText('Demo-Steuerung öffnen'));
+  await user.press(pill('Lädt'));
+  await user.press(pill('Keine Verbindung'));
+
+  expect(pill('Lädt')).not.toBeSelected();
+  expect(pill('Keine Verbindung')).toBeSelected();
+  expect(screen.getByText(/^1 Zustand aktiv/)).toBeTruthy();
+
+  await user.press(pill('Alles zurücksetzen'));
+  expect(pill('Keine Verbindung')).not.toBeSelected();
+});
+
+test('the demo sheet jumps between shows', async () => {
+  const user = setupUser();
+  await renderApp();
+  const pill = (name: string) => screen.getByRole('button', { name });
+
+  await user.press(screen.getByLabelText('Demo-Steuerung öffnen'));
+  expect(pill('18:00 Feierabendwelle')).toBeSelected();
+
+  await user.press(pill('23:00 Nachtschiene'));
+
+  expect(pill('23:00 Nachtschiene')).toBeSelected();
+  expect(pill('18:00 Feierabendwelle')).not.toBeSelected();
+});
