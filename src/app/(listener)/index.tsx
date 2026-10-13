@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 
 import { AreaScreen } from '@/components/area-screen';
-import { ComponentsLink, ScreenPlaceholder } from '@/components/screen-placeholder';
+import { ScreenPlaceholder } from '@/components/screen-placeholder';
 import { AppButton } from '@/components/ui';
 
 export default function NowPlayingScreen() {
@@ -15,7 +15,6 @@ export default function NowPlayingScreen() {
           onPress={() => router.push('/rate/show')}
         />
         <AppButton label="Song wünschen" variant="secondary" onPress={() => router.push('/wish')} />
-        <ComponentsLink />
       </ScreenPlaceholder>
     </AreaScreen>
   );
