@@ -22,6 +22,15 @@ test('listener starts on now playing with listener tabs', async () => {
   expect(screen.queryByText('Ticker')).toBeNull();
 });
 
+test('pressing a tab switches the page', async () => {
+  const user = setupUser();
+  const app = await renderApp();
+
+  await user.press(screen.getByRole('tab', { name: 'Verlauf' }));
+
+  expect(app.getPathname()).toBe('/history');
+});
+
 test('opens rating as modal from now playing', async () => {
   const user = setupUser();
   const app = await renderApp();
