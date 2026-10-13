@@ -10,7 +10,11 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useState } from 'react';
 
+import { DemoClock, demoMoment } from '@/demo/demo-clock';
+import { DemoProvider } from '@/demo/demo-provider';
+import { DemoSettings } from '@/demo/demo-settings';
 import { RoleProvider, useRole } from '@/role/role-provider';
+import { schedule } from '@/seed/schedule';
 import { createStubStations } from '@/stations/stations';
 import { StationsProvider } from '@/stations/stations-provider';
 import { fontAssets, ThemeProvider, useColorSchemePreference, useTheme } from '@/theme';
@@ -19,6 +23,8 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [stations] = useState(createStubStations);
+  const [clock] = useState(() => new DemoClock(demoMoment(schedule.slot('feierabend'))));
+  const [settings] = useState(() => new DemoSettings());
   const [fontsLoaded, fontError] = useFonts(fontAssets);
   const ready = fontsLoaded || fontError !== null;
 
@@ -30,11 +36,13 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <StationsProvider stations={stations}>
-        <RoleProvider>
-          <ThemedNavigation />
-        </RoleProvider>
-      </StationsProvider>
+      <DemoProvider clock={clock} settings={settings}>
+        <StationsProvider stations={stations}>
+          <RoleProvider>
+            <ThemedNavigation />
+          </RoleProvider>
+        </StationsProvider>
+      </DemoProvider>
     </ThemeProvider>
   );
 }
