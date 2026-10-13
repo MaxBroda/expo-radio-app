@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useState } from 'react';
 
+import { RoleProvider, useRole } from '@/role/role-provider';
 import { createStubStations } from '@/stations/stations';
 import { StationsProvider } from '@/stations/stations-provider';
 import { fontAssets, ThemeProvider, useColorSchemePreference, useTheme } from '@/theme';
@@ -30,7 +31,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <StationsProvider stations={stations}>
-        <ThemedNavigation />
+        <RoleProvider>
+          <ThemedNavigation />
+        </RoleProvider>
       </StationsProvider>
     </ThemeProvider>
   );
@@ -40,6 +43,7 @@ export default function RootLayout() {
 function ThemedNavigation() {
   const colors = useTheme();
   const { scheme } = useColorSchemePreference();
+  const { role } = useRole();
   const base = scheme === 'light' ? DefaultTheme : DarkTheme;
 
   useEffect(() => {
@@ -64,7 +68,25 @@ function ThemedNavigation() {
       <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
       <Stack
         screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg.base } }}
-      />
+      >
+        <Stack.Protected guard={role === 'listener'}>
+          <Stack.Screen name="(listener)" />
+          <Stack.Screen name="rate/track" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="rate/show" options={{ presentation: 'modal' }} />
+        </Stack.Protected>
+        <Stack.Protected guard={role === 'moderator'}>
+          <Stack.Screen name="(studio)" />
+        </Stack.Protected>
+        <Stack.Screen
+          name="demo"
+          options={{
+            presentation: 'transparentModal',
+            animation: 'fade',
+            contentStyle: { backgroundColor: 'transparent' },
+          }}
+        />
+        <Stack.Screen name="components" />
+      </Stack>
     </NavigationThemeProvider>
   );
 }

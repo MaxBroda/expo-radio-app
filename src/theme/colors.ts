@@ -18,8 +18,10 @@ export const dark = {
   data: { base: '#9B7BFF', surface: '#1C1630', border: '#4A3A7A', text: '#C6B4FF' },
   critical: { base: '#FF9E8E', surface: '#2A1714', border: '#7A3A30', text: '#FFB5A6' },
   scale: { low: '#FF8172', mid: '#6E667C', high: '#9B7BFF' },
+  tabBar: { listener: '#120D18', studio: '#100B16' },
   ripple: { neutral: 'rgba(246, 243, 248, 0.14)', accent: 'rgba(255, 61, 127, 0.28)' },
   pressedOverlay: 'rgba(0, 0, 0, 0.2)',
+  overlay: 'rgba(5, 3, 8, 0.72)',
 };
 
 export type Colors = typeof dark;
@@ -44,6 +46,8 @@ export const light: Colors = {
   data: { base: '#5B35C7', surface: '#EDE7FB', border: '#C4B2F2', text: '#3F1F9B' },
   critical: { base: '#B33B2A', surface: '#FBE8E4', border: '#E8B5AA', text: '#8E2A1C' },
   scale: { low: '#B33B2A', mid: '#6B6377', high: '#5B35C7' },
+  tabBar: { listener: '#FFFFFF', studio: '#F7F5F9' },
   ripple: { neutral: 'rgba(21, 16, 28, 0.1)', accent: 'rgba(194, 24, 91, 0.2)' },
   pressedOverlay: 'rgba(21, 16, 28, 0.06)',
+  overlay: 'rgba(21, 16, 28, 0.4)',
 };
