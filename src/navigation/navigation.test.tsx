@@ -64,3 +64,12 @@ test('choosing listener again returns to now playing', async () => {
   expect(app.getPathname()).toBe('/');
   expect(screen.getByText('Verlauf')).toBeTruthy();
 });
+
+test('components page is reachable from now playing', async () => {
+  const user = setupUser();
+  const app = await renderApp();
+
+  await user.press(screen.getByText('Components'));
+
+  expect(app.getPathname()).toBe('/components');
+});
