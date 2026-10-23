@@ -22,9 +22,11 @@ import { fontAssets, ThemeProvider, useColorSchemePreference, useTheme } from '@
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [stations] = useState(createStubStations);
   const [clock] = useState(() => new DemoClock(demoMoment(schedule.slot('feierabend'))));
   const [settings] = useState(() => new DemoSettings());
+  const [stations] = useState(() =>
+    createStubStations({ now: () => clock.now(), flags: () => settings.get() }),
+  );
   const [fontsLoaded, fontError] = useFonts(fontAssets);
   const ready = fontsLoaded || fontError !== null;
 

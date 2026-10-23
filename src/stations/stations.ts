@@ -3,6 +3,7 @@ import { StubMusicDatabase } from '@/adapters/stub/stub-music-database';
 import { StubNotificationService } from '@/adapters/stub/stub-notification-service';
 import { StubPlayout } from '@/adapters/stub/stub-playout';
 import { StubWishSystem } from '@/adapters/stub/stub-wish-system';
+import { defaultFlags, type DemoFlags } from '@/demo/demo-settings';
 import type { FeedbackHub } from '@/ports/feedback-hub';
 import type { MusicDatabase } from '@/ports/music-database';
 import type { NotificationService } from '@/ports/notification-service';
@@ -17,12 +18,20 @@ export type Stations = {
   notifications: NotificationService;
 };
 
-export function createStubStations(): Stations {
+/** What the stubs read from the demo: its clock and the states forced in the demo sheet. */
+export type StubContext = {
+  now: () => Date;
+  flags: () => DemoFlags;
+};
+
+const realTime: StubContext = { now: () => new Date(), flags: () => defaultFlags };
+
+export function createStubStations(context: StubContext = realTime): Stations {
   return {
     playout: new StubPlayout(),
     musicDatabase: new StubMusicDatabase(),
     feedbackHub: new StubFeedbackHub(),
-    wishSystem: new StubWishSystem(),
+    wishSystem: new StubWishSystem({ now: context.now, flags: context.flags }),
     notifications: new StubNotificationService(),
   };
 }
