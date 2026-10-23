@@ -1,5 +1,5 @@
-import { screen, userEvent } from '@testing-library/react-native';
-import { Stack } from 'expo-router';
+import { act, screen, userEvent } from '@testing-library/react-native';
+import { router, Stack } from 'expo-router';
 import { renderRouter } from 'expo-router/testing-library';
 
 import { StubMusicDatabase } from '@/adapters/stub/stub-music-database';
@@ -49,7 +49,7 @@ async function setup(flags: Partial<DemoFlags> = {}) {
   );
   await app;
   const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-  return { user, getPathname: app.getPathname };
+  return { user, settings, getPathname: app.getPathname };
 }
 
 const sendButton = () => screen.getByRole('button', { name: 'Wunsch absenden' });
@@ -134,4 +134,19 @@ test('without connection the screen says so instead of showing an empty list', a
 
   expect(await screen.findByText('Keine Verbindung', {}, wait)).toBeTruthy();
   expect(sendButton()).toBeDisabled();
+});
+
+test('a failed send is no longer reported once the listener comes back with the quota used up', async () => {
+  const { user, settings } = await setup({ sendFails: true });
+  await screen.findByText('Landungsbrücken raus', {}, wait);
+  await user.press(screen.getByText('Landungsbrücken raus'));
+  await user.press(sendButton());
+  expect(await screen.findByText('Wunsch nicht gesendet', {}, wait)).toBeTruthy();
+
+  settings.set({ sendFails: false, quotaExhausted: true });
+  await act(() => router.push('/wish/sent?id=w_01'));
+  await act(() => router.back());
+
+  expect(await screen.findByText('Kontingent erschöpft', {}, wait)).toBeTruthy();
+  expect(screen.queryByText('Wunsch nicht gesendet')).toBeNull();
 });

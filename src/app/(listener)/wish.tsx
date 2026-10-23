@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { CircleAlert, Search, WifiOff } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AreaScreen } from '@/components/area-screen';
@@ -17,7 +17,7 @@ import { validateWish, wishLimits, WishRejectedError } from '@/domain/wish-valid
 import type { MusicDatabase } from '@/ports/music-database';
 import type { WishSystem } from '@/ports/wish-system';
 import { useStations } from '@/stations/stations-provider';
-import { screenPadding, spacing, useTheme } from '@/theme';
+import { screenPadding, spacing, touchTarget, useTheme } from '@/theme';
 
 type Choice = { kind: 'catalog'; track: Track } | { kind: 'freeText'; description: string };
 
@@ -62,6 +62,7 @@ export default function WishScreen() {
   useFocusEffect(
     useCallback(() => {
       let current = true;
+      setSendFailed(false);
       Promise.all([wishSystem.quota(), loadPopular(wishSystem, musicDatabase)]).then(
         ([nextQuota, nextPopular]) => {
           if (!current) return;
@@ -194,7 +195,7 @@ export default function WishScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { borderTopColor: colors.line.default }]}>
-        {sendFailed && (
+        {sendFailed && !exhausted && !unreachable && (
           <StatusBanner
             tone="error"
             title="Wunsch nicht gesendet"
@@ -322,7 +323,7 @@ function Choices({ search, query, popular, choice, onChoose }: ChoicesProps) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <View style={styles.section}>
       <AppText variant="overline" tone="muted">
@@ -339,9 +340,9 @@ const styles = StyleSheet.create({
   section: { gap: spacing.sm },
   noHit: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   noHitIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: touchTarget,
+    height: touchTarget,
+    borderRadius: touchTarget / 2,
     borderWidth: 1,
     borderStyle: 'dashed',
     alignItems: 'center',
