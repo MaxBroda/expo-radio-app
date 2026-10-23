@@ -17,6 +17,15 @@ export type WishProblem =
 export type WishValidation =
   { ok: true; input: WishInput } | { ok: false; problems: WishProblem[] };
 
+export type WishRejection = WishProblem | 'quotaExhausted';
+
+export class WishRejectedError extends Error {
+  constructor(readonly reason: WishRejection) {
+    super(`Wish rejected: ${reason}`);
+    this.name = 'WishRejectedError';
+  }
+}
+
 function normalizeSong(song: WishedSong): WishedSong {
   if (song.kind === 'catalog') return song;
   return { kind: 'freeText', description: song.description.replace(/\s+/g, ' ').trim() };
