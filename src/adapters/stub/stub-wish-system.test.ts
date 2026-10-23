@@ -88,7 +88,7 @@ test('invalid input is rejected by the system as well', async () => {
   ).rejects.toEqual(new WishRejectedError('freeTextTooShort'));
 });
 
-test('the fourth wish within an hour is rejected and the quota resets at the full hour', async () => {
+test('the fourth wish in an hour is rejected until the full hour', async () => {
   const { system, advance } = setup({ wishes: [] });
   for (const id of ['t_0001', 't_0002', 't_0003']) await system.submitRequest({ song: track(id) });
 
