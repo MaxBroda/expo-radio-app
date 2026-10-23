@@ -29,7 +29,7 @@ const realTime: StubContext = { now: () => new Date(), flags: () => defaultFlags
 export function createStubStations(context: StubContext = realTime): Stations {
   return {
     playout: new StubPlayout(),
-    musicDatabase: new StubMusicDatabase(),
+    musicDatabase: new StubMusicDatabase({ connection: () => context.flags().connection }),
     feedbackHub: new StubFeedbackHub(),
     wishSystem: new StubWishSystem({ now: context.now, flags: context.flags }),
     notifications: new StubNotificationService(),
