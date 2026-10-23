@@ -83,6 +83,7 @@ function ThemedNavigation() {
           <Stack.Screen name="(listener)" />
           <Stack.Screen name="rate/track" options={{ presentation: 'modal' }} />
           <Stack.Screen name="rate/show" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="wish/sent" options={{ animation: 'fade' }} />
         </Stack.Protected>
         <Stack.Protected guard={role === 'moderator'}>
           <Stack.Screen name="(studio)" />
