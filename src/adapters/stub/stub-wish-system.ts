@@ -62,7 +62,7 @@ export class StubWishSystem implements WishSystem {
       (w) => w.status === 'open' && w.song.kind === 'catalog' && w.song.trackId === trackId,
     );
 
-    // Requesting a song that is already on the list counts as a vote, so the studio sees no duplicates.
+    // An open wish for the same track gets a vote instead, so the studio sees no duplicates.
     if (open) {
       return this.replace({ ...open, votes: open.votes + 1, greeting: open.greeting ?? greeting });
     }
