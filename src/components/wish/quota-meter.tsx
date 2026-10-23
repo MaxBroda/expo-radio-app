@@ -22,7 +22,7 @@ export function QuotaMeter({ quota }: { quota: WishQuota }) {
           />
         ))}
       </View>
-      <AppText variant="label" tone="secondary" style={styles.text}>
+      <AppText variant="caption" tone="secondary" numberOfLines={1} style={styles.text}>
         {quotaLine(quota)}
       </AppText>
     </View>
@@ -30,7 +30,7 @@ export function QuotaMeter({ quota }: { quota: WishQuota }) {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   segments: { flexDirection: 'row', gap: spacing.xs },
   segment: { width: 18, height: 4, borderRadius: radius.pill },
   text: { flex: 1 },
