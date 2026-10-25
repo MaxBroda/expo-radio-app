@@ -4,12 +4,13 @@ import { StyleSheet, View } from 'react-native';
 
 import { ModalHeader } from '@/components/modal-header';
 import { RatingStars } from '@/components/rating-stars';
-import { AppText } from '@/components/ui';
+import { AppText, TextField } from '@/components/ui';
 import type { Score } from '@/domain/rating';
 import { screenPadding, spacing } from '@/theme';
 
 export default function RateTrackScreen() {
   const [score, setScore] = useState<Score>();
+  const [comment, setComment] = useState('');
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -17,6 +18,15 @@ export default function RateTrackScreen() {
       <View style={styles.content}>
         <AppText variant="headline">Wie findest du den Titel?</AppText>
         <RatingStars value={score} onChange={setScore} />
+        <TextField
+          label="Kommentar"
+          optional
+          multiline
+          value={comment}
+          onChangeText={setComment}
+          placeholder="Was war gut, was nicht?"
+          maxLength={240}
+        />
       </View>
     </SafeAreaView>
   );
