@@ -92,7 +92,7 @@ export default function DemoSheet() {
     <View style={styles.container}>
       <Pressable
         style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
-        onPress={router.back}
+        onPress={() => router.back()}
         accessibilityLabel="Demo-Steuerung schließen"
       />
       <SafeAreaView

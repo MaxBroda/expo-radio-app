@@ -1,5 +1,4 @@
 import { screen, userEvent } from '@testing-library/react-native';
-import type { TabNavigationState } from 'expo-router';
 import { Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -18,20 +17,9 @@ const routes = [
 ];
 
 function setup({ focused = 0, prevented = false } = {}) {
-  const navigation = {
-    emit: jest.fn(() => ({ defaultPrevented: prevented })),
-    navigate: jest.fn(),
-  };
-  const state: TabNavigationState<Record<string, undefined>> = {
-    type: 'tab',
-    key: 'tabs',
-    index: focused,
-    routeNames: routes.map((route) => route.name),
-    routes: routes.map(({ key, name }) => ({ key, name })),
-    history: [],
-    preloadedRouteKeys: [],
-    stale: false,
-  };
+  const emitter = { emit: jest.fn(() => ({ defaultPrevented: prevented })) };
+  const navigateToTab = jest.fn();
+  const state = { index: focused, routes: routes.map(({ key, name }) => ({ key, name })) };
   const descriptors = Object.fromEntries(
     routes.map(({ key, title }) => [
       key,
@@ -48,11 +36,17 @@ function setup({ focused = 0, prevented = false } = {}) {
   const TabBar = renderTabBar('listener');
 
   return {
-    navigation,
+    emitter,
+    navigateToTab,
     render: () =>
       renderWithTheme(
         <SafeAreaProvider initialMetrics={metrics}>
-          <TabBar state={state} descriptors={descriptors} navigation={navigation} />
+          <TabBar
+            state={state}
+            descriptors={descriptors}
+            emitter={emitter}
+            navigateToTab={navigateToTab}
+          />
         </SafeAreaProvider>,
       ),
   };
@@ -68,33 +62,33 @@ test('marks the focused tab as selected and passes focus to its icon', async () 
 });
 
 test('navigates to a tab that is not focused', async () => {
-  const { navigation, render } = setup();
+  const { emitter, navigateToTab, render } = setup();
   await render();
 
   await userEvent.press(screen.getByRole('tab', { name: 'Verlauf' }));
 
-  expect(navigation.emit).toHaveBeenCalledWith({
+  expect(emitter.emit).toHaveBeenCalledWith({
     type: 'tabPress',
     target: 'history-key',
     canPreventDefault: true,
   });
-  expect(navigation.navigate).toHaveBeenCalledWith('history');
+  expect(navigateToTab).toHaveBeenCalledWith('history-key');
 });
 
 test('does not navigate when the focused tab is pressed again', async () => {
-  const { navigation, render } = setup();
+  const { navigateToTab, render } = setup();
   await render();
 
   await userEvent.press(screen.getByRole('tab', { name: 'Jetzt läuft' }));
 
-  expect(navigation.navigate).not.toHaveBeenCalled();
+  expect(navigateToTab).not.toHaveBeenCalled();
 });
 
 test('respects a prevented tab press', async () => {
-  const { navigation, render } = setup({ prevented: true });
+  const { navigateToTab, render } = setup({ prevented: true });
   await render();
 
   await userEvent.press(screen.getByRole('tab', { name: 'Verlauf' }));
 
-  expect(navigation.navigate).not.toHaveBeenCalled();
+  expect(navigateToTab).not.toHaveBeenCalled();
 });
