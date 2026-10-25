@@ -1,28 +1,27 @@
-import type { TabNavigationState } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { type ColorValue, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Tappable } from '@/components/ui';
 import { fonts, spacing, touchTarget, useTheme } from '@/theme';
 
 type Area = 'listener' | 'studio';
-type IconProps = { focused: boolean; color: string };
+type IconProps = { focused: boolean; color: ColorValue };
 
-// expo-router types these as `any`, so the bar declares the part it actually uses.
+// Only the part of the tab bar props the bar uses, so tests can pass plain objects.
 type TabBarProps = {
-  state: TabNavigationState<Record<string, object | undefined>>;
+  state: { index: number; routes: { key: string; name: string }[] };
   descriptors: Record<
     string,
     { options: { title?: string; tabBarIcon?: (props: IconProps) => ReactNode } }
   >;
-  navigation: {
+  emitter: {
     emit(event: { type: 'tabPress'; target: string; canPreventDefault: true }): {
       defaultPrevented: boolean;
     };
-    navigate(name: string): void;
   };
+  navigateToTab(routeKey: string): void;
 };
 
 export function renderTabBar(area: Area) {
@@ -40,7 +39,7 @@ export function tabIcon(Icon: LucideIcon) {
 type Props = TabBarProps & { area: Area };
 
 /** Bottom bar for the swipeable top-tab navigator, which only ships a top bar of its own. */
-export function TabBar({ state, descriptors, navigation, area }: Props) {
+export function TabBar({ state, descriptors, emitter, navigateToTab, area }: Props) {
   const colors = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -63,12 +62,12 @@ export function TabBar({ state, descriptors, navigation, area }: Props) {
         const label = options.title ?? route.name;
 
         function onPress() {
-          const event = navigation.emit({
+          const event = emitter.emit({
             type: 'tabPress',
             target: route.key,
             canPreventDefault: true,
           });
-          if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+          if (!focused && !event.defaultPrevented) navigateToTab(route.key);
         }
 
         return (

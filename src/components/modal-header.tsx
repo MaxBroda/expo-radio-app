@@ -12,7 +12,7 @@ export function ModalHeader({ title }: { title: string }) {
   return (
     <View style={[styles.header, { borderBottomColor: colors.line.default }]}>
       <Tappable
-        onPress={router.back}
+        onPress={() => router.back()}
         accessibilityRole="button"
         accessibilityLabel="Zurück"
         style={styles.back}

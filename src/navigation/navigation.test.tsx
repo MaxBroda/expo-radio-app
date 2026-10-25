@@ -4,11 +4,8 @@ import { renderRouter } from 'expo-router/testing-library';
 
 const appDir = './src/app';
 
-// renderRouter attaches its helpers to the pending RNTL render, so awaiting it would drop them.
-async function renderApp() {
-  const app = renderRouter(appDir, { initialUrl: '/' });
-  await app;
-  return { getPathname: app.getPathname };
+function renderApp() {
+  return renderRouter(appDir, { initialUrl: '/' });
 }
 
 function setupUser() {
