@@ -1,7 +1,8 @@
-import { screen } from '@testing-library/react-native';
+import { act, fireEvent, screen, userEvent } from '@testing-library/react-native';
 
 import RateTrackScreen from '@/app/rate/track';
 import type { NowPlaying } from '@/domain/now-playing';
+import type { Rating, RatingId, RatingInput } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
 import { schedule } from '@/seed/schedule';
 import { createStubStations } from '@/stations/stations';
@@ -16,9 +17,14 @@ const playing: NowPlaying = {
   show: schedule.showAt(startedAt),
 };
 
+function savedRating(input: RatingInput): Rating {
+  return { ...input, id: 'rating-1' as RatingId, createdAt: startedAt };
+}
+
 async function renderTrack(result: () => Promise<NowPlaying>) {
   const stations = createStubStations();
   stations.playout.getNowPlaying = jest.fn(result);
+  stations.feedbackHub.submitRating = jest.fn(async (input) => savedRating(input));
   await renderWithTheme(
     <StationsProvider stations={stations}>
       <RateTrackScreen />
@@ -28,10 +34,13 @@ async function renderTrack(result: () => Promise<NowPlaying>) {
 }
 
 test('shows a loading state while the current track is pending', async () => {
-  await renderTrack(() => new Promise(() => {}));
+  const stations = await renderTrack(() => new Promise(() => {}));
 
   expect(screen.getByRole('progressbar', { name: 'Titel wird geladen' })).toBeOnTheScreen();
   expect(screen.queryByText('Nordlicht')).not.toBeOnTheScreen();
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  expect(screen.getByRole('button', { name: 'Bewertung absenden' })).toBeDisabled();
+  expect(stations.feedbackHub.submitRating).not.toHaveBeenCalled();
 });
 
 test('shows the track returned by the station with artist and start time', async () => {
@@ -42,6 +51,7 @@ test('shows the track returned by the station with artist and start time', async
   expect(screen.getByText('läuft seit 18:40')).toBeOnTheScreen();
   expect(screen.queryByRole('progressbar')).not.toBeOnTheScreen();
   expect(stations.playout.getNowPlaying).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: 'Bewertung absenden' })).toBeDisabled();
 });
 
 test('shows an error when the station cannot provide a track', async () => {
@@ -50,4 +60,78 @@ test('shows an error when the station cannot provide a track', async () => {
   expect(await screen.findByRole('alert')).toBeOnTheScreen();
   expect(screen.getByText('Titel gerade nicht verfügbar')).toBeOnTheScreen();
   expect(screen.queryByText('Nordlicht')).not.toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Bewertung absenden' })).toBeDisabled();
+});
+
+test.each(['', 'Guter Mix'])('sends the selected track rating with comment %p', async (comment) => {
+  const stations = await renderTrack(() => Promise.resolve(playing));
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await fireEvent.changeText(screen.getByLabelText(/Kommentar/), comment);
+
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+
+  expect(stations.feedbackHub.submitRating).toHaveBeenCalledWith({
+    score: 4,
+    subject: { kind: 'track', trackId: playing.track.id },
+    comment: comment || undefined,
+  });
+  expect(await screen.findByText('Bewertung gesendet')).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Bewertung absenden' })).toBeDisabled();
+  expect(screen.getByLabelText(/Kommentar/)).toHaveProp('editable', false);
+});
+
+test('locks the form and prevents duplicate requests while sending', async () => {
+  const stations = await renderTrack(() => Promise.resolve(playing));
+  let finish!: () => void;
+  jest.mocked(stations.feedbackHub.submitRating).mockImplementationOnce(
+    (input) =>
+      new Promise((resolve) => {
+        finish = () => resolve(savedRating(input));
+      }),
+  );
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  const button = screen.getByRole('button', { name: 'Bewertung absenden' });
+
+  await fireEvent.press(button);
+  await fireEvent.press(button);
+
+  expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: 'Wird gesendet …' })).toBeDisabled();
+  expect(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' })).toBeDisabled();
+  expect(screen.getByLabelText(/Kommentar/)).toHaveProp('editable', false);
+  await act(async () => finish());
+  expect(await screen.findByText('Bewertung gesendet')).toBeOnTheScreen();
+});
+
+test('keeps the rating after a failed send and allows retrying', async () => {
+  const stations = await renderTrack(() => Promise.resolve(playing));
+  jest.mocked(stations.feedbackHub.submitRating).mockRejectedValueOnce(new Error('offline'));
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '2 von 5 Sternen: naja' }));
+  await fireEvent.changeText(screen.getByLabelText(/Kommentar/), 'Zu langsam');
+
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+
+  expect(await screen.findByText('Senden fehlgeschlagen')).toBeOnTheScreen();
+  expect(screen.getByText('2 von 5 · naja')).toBeOnTheScreen();
+  expect(screen.getByLabelText(/Kommentar/)).toHaveDisplayValue('Zu langsam');
+  expect(screen.getByRole('button', { name: 'Bewertung absenden' })).toBeEnabled();
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  expect(await screen.findByText('Bewertung gesendet')).toBeOnTheScreen();
+  expect(screen.queryByText('Senden fehlgeschlagen')).not.toBeOnTheScreen();
+  expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(2);
+});
+
+test('does not submit a comment over the limit even if passed programmatically', async () => {
+  const stations = await renderTrack(() => Promise.resolve(playing));
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await fireEvent.changeText(screen.getByLabelText(/Kommentar/), 'a'.repeat(241));
+
+  const button = screen.getByRole('button', { name: 'Bewertung absenden' });
+  expect(button).toBeDisabled();
+  await userEvent.press(button);
+  expect(stations.feedbackHub.submitRating).not.toHaveBeenCalled();
 });
