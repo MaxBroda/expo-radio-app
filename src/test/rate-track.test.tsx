@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, userEvent } from '@testing-library/react-native';
 
 import RateTrackScreen from '@/app/rate/track';
+import { AlreadyRatedError } from '@/domain/errors';
 import type { NowPlaying } from '@/domain/now-playing';
 import type { Rating, RatingId, RatingInput } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
@@ -134,4 +135,21 @@ test('does not submit a comment over the limit even if passed programmatically',
   expect(button).toBeDisabled();
   await userEvent.press(button);
   expect(stations.feedbackHub.submitRating).not.toHaveBeenCalled();
+});
+
+test('shows an already rated notice instead of offering another send', async () => {
+  const stations = await renderTrack(() => Promise.resolve(playing));
+  jest.mocked(stations.feedbackHub.submitRating).mockRejectedValueOnce(new AlreadyRatedError());
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+
+  expect(await screen.findByText('Schon bewertet')).toBeOnTheScreen();
+  expect(screen.getByText('Nordlicht')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'Bewertung absenden' })).not.toBeOnTheScreen();
+  expect(screen.queryByRole('radiogroup')).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText(/Kommentar/)).not.toBeOnTheScreen();
+  expect(screen.queryByText('Senden fehlgeschlagen')).not.toBeOnTheScreen();
+  expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(1);
 });
