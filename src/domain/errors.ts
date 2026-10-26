@@ -14,3 +14,10 @@ export class NotImplementedError extends Error {
     this.name = 'NotImplementedError';
   }
 }
+
+export class AlreadyRatedError extends Error {
+  constructor() {
+    super('This item has already been rated');
+    this.name = 'AlreadyRatedError';
+  }
+}
