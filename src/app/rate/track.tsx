@@ -1,20 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ModalHeader } from '@/components/modal-header';
 import { RatingStars } from '@/components/rating-stars';
-import { AppText, Card, StatusBanner, TextField } from '@/components/ui';
+import { AppButton, AppText, Card, StatusBanner, TextField } from '@/components/ui';
 import type { Score } from '@/domain/rating';
 import type { PlayedTrack } from '@/domain/track';
 import { useStations } from '@/stations/stations-provider';
 import { screenPadding, spacing } from '@/theme';
 
+const maxCommentLength = 240;
+
 export default function RateTrackScreen() {
-  const { playout } = useStations();
+  const { playout, feedbackHub } = useStations();
   const [playing, setPlaying] = useState<PlayedTrack | 'loading' | 'error'>('loading');
   const [score, setScore] = useState<Score>();
   const [comment, setComment] = useState('');
+  const [submission, setSubmission] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const submitLocked = useRef(false);
+  const locked = submission === 'sending' || submission === 'sent';
+  const canSubmit =
+    typeof playing !== 'string' &&
+    score !== undefined &&
+    comment.length <= maxCommentLength &&
+    !locked;
 
   useEffect(() => {
     let active = true;
@@ -31,10 +41,34 @@ export default function RateTrackScreen() {
     };
   }, [playout]);
 
+  async function submit() {
+    if (
+      typeof playing === 'string' ||
+      score === undefined ||
+      comment.length > maxCommentLength ||
+      submitLocked.current
+    ) {
+      return;
+    }
+    submitLocked.current = true;
+    setSubmission('sending');
+    try {
+      await feedbackHub.submitRating({
+        score,
+        subject: { kind: 'track', trackId: playing.track.id },
+        comment: comment || undefined,
+      });
+      setSubmission('sent');
+    } catch {
+      submitLocked.current = false;
+      setSubmission('error');
+    }
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <ModalHeader title="Playlist bewerten" />
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {playing === 'loading' ? (
           <Card accessible accessibilityRole="progressbar" accessibilityLabel="Titel wird geladen">
             <AppText tone="muted">Titel wird geladen …</AppText>
@@ -55,7 +89,7 @@ export default function RateTrackScreen() {
           </Card>
         )}
         <AppText variant="headline">Wie findest du den Titel?</AppText>
-        <RatingStars value={score} onChange={setScore} />
+        <RatingStars value={score} onChange={setScore} disabled={locked} />
         <TextField
           label="Kommentar"
           optional
@@ -63,7 +97,27 @@ export default function RateTrackScreen() {
           value={comment}
           onChangeText={setComment}
           placeholder="Was war gut, was nicht?"
-          maxLength={240}
+          maxLength={maxCommentLength}
+          disabled={locked}
+        />
+        {submission === 'error' && (
+          <StatusBanner
+            tone="error"
+            title="Senden fehlgeschlagen"
+            text="Deine Bewertung bleibt erhalten. Bitte versuche es noch einmal."
+          />
+        )}
+        {submission === 'sent' && (
+          <StatusBanner tone="success" title="Bewertung gesendet" text="Danke für dein Feedback." />
+        )}
+      </ScrollView>
+      <View style={styles.footer}>
+        <AppButton
+          label={submission === 'sending' ? 'Wird gesendet …' : 'Bewertung absenden'}
+          onPress={() => {
+            void submit();
+          }}
+          disabled={!canSubmit}
         />
       </View>
     </SafeAreaView>
@@ -72,5 +126,6 @@ export default function RateTrackScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { flex: 1, padding: screenPadding.listener, gap: spacing.md },
+  content: { flexGrow: 1, padding: screenPadding.listener, gap: spacing.md },
+  footer: { padding: screenPadding.listener },
 });
