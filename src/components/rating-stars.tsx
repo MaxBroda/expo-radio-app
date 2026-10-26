@@ -15,9 +15,9 @@ const labels: Record<Score, string> = {
   5: 'top',
 };
 
-type Props = { value?: Score; onChange: (score: Score) => void };
+type Props = { value?: Score; onChange: (score: Score) => void; disabled?: boolean };
 
-export function RatingStars({ value, onChange }: Props) {
+export function RatingStars({ value, onChange, disabled = false }: Props) {
   const colors = useTheme();
 
   return (
@@ -29,9 +29,10 @@ export function RatingStars({ value, onChange }: Props) {
             <Tappable
               key={score}
               onPress={() => onChange(score)}
+              disabled={disabled}
               accessibilityRole="radio"
               accessibilityLabel={`${score} von 5 Sternen: ${labels[score]}`}
-              accessibilityState={{ checked: value === score }}
+              accessibilityState={{ checked: value === score, disabled }}
               style={[
                 styles.star,
                 {
