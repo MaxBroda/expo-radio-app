@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 
 import RateShowScreen from '@/app/rate/show';
 import type { NowPlaying } from '@/domain/now-playing';
@@ -47,6 +47,7 @@ test('does not invent a host for an unmoderated show', async () => {
   expect(await screen.findByText('Keine Moderation')).toBeOnTheScreen();
   expect(screen.getByText('Nachtschiene')).toBeOnTheScreen();
   expect(screen.getByText('23:00 – 06:00')).toBeOnTheScreen();
+  expect(screen.queryByLabelText(/Kommentar/)).not.toBeOnTheScreen();
 });
 
 test('shows an error when the current show is unavailable', async () => {
@@ -54,4 +55,17 @@ test('shows an error when the current show is unavailable', async () => {
 
   expect(await screen.findByRole('alert')).toBeOnTheScreen();
   expect(screen.getByText('Sendung gerade nicht verfügbar')).toBeOnTheScreen();
+  expect(screen.queryByLabelText(/Kommentar/)).not.toBeOnTheScreen();
+});
+
+test('allows an optional comment up to 240 characters', async () => {
+  await renderShow(() => Promise.resolve(playing));
+  await screen.findByText('Lena Osterkamp');
+
+  const field = screen.getByLabelText(/Kommentar/);
+  expect(field).toHaveProp('maxLength', 240);
+  expect(screen.getByText('0/240')).toBeOnTheScreen();
+  await fireEvent.changeText(field, 'Gute Sendung');
+  expect(field).toHaveDisplayValue('Gute Sendung');
+  expect(screen.getByText('12/240')).toBeOnTheScreen();
 });
