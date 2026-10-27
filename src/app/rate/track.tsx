@@ -1,29 +1,32 @@
 import { router } from 'expo-router';
+import { Check } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ModalHeader } from '@/components/modal-header';
 import { RatingStars } from '@/components/rating-stars';
-import { AppButton, AppText, Card, StatusBanner, TextField } from '@/components/ui';
+import { AppButton, AppText, Card, Pill, StatusBanner, TextField } from '@/components/ui';
 import { AlreadyRatedError } from '@/domain/errors';
-import type { Score } from '@/domain/rating';
+import type { Rating, Score } from '@/domain/rating';
 import type { PlayedTrack } from '@/domain/track';
 import { useStations } from '@/stations/stations-provider';
-import { screenPadding, spacing } from '@/theme';
+import { radius, screenPadding, spacing, touchTarget, useTheme } from '@/theme';
 
 const maxCommentLength = 240;
 
 export default function RateTrackScreen() {
+  const colors = useTheme();
   const { playout, feedbackHub } = useStations();
   const [playing, setPlaying] = useState<PlayedTrack | 'loading' | 'error'>('loading');
   const [score, setScore] = useState<Score>();
   const [comment, setComment] = useState('');
   const [submission, setSubmission] = useState<
-    'idle' | 'sending' | 'sent' | 'error' | 'alreadyRated'
+    'idle' | 'sending' | 'error' | 'alreadyRated' | Rating
   >('idle');
   const submitLocked = useRef(false);
-  const locked = submission === 'sending' || submission === 'sent' || submission === 'alreadyRated';
+  const receipt = typeof submission === 'object' ? submission : undefined;
+  const locked = submission === 'sending' || receipt !== undefined || submission === 'alreadyRated';
   const canSubmit =
     typeof playing !== 'string' &&
     score !== undefined &&
@@ -57,12 +60,12 @@ export default function RateTrackScreen() {
     submitLocked.current = true;
     setSubmission('sending');
     try {
-      await feedbackHub.submitRating({
+      const saved = await feedbackHub.submitRating({
         score,
         subject: { kind: 'track', trackId: playing.track.id },
         comment: comment || undefined,
       });
-      setSubmission('sent');
+      setSubmission(saved);
     } catch (error) {
       if (error instanceof AlreadyRatedError) {
         setSubmission('alreadyRated');
@@ -73,10 +76,59 @@ export default function RateTrackScreen() {
     }
   }
 
+  if (receipt && typeof playing !== 'string') {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <ScrollView contentContainerStyle={styles.confirmation}>
+          <View
+            style={[
+              styles.successIcon,
+              { backgroundColor: colors.accent.surface, borderColor: colors.accent.border },
+            ]}
+          >
+            <Check size={spacing.xxxl} color={colors.accent.base} />
+          </View>
+          <AppText variant="display" accessibilityRole="header" style={styles.centered}>
+            Danke, ist angekommen
+          </AppText>
+          <AppText tone="secondary" style={styles.centered} accessibilityLiveRegion="polite">
+            Deine Bewertung wurde gesendet.
+          </AppText>
+          <Card style={styles.receipt}>
+            <View style={styles.receiptHeader}>
+              <Pill label={`${receipt.score}/5`} active />
+              <Pill label="Titel" />
+              <AppText variant="mono" tone="muted" style={styles.receiptTime}>
+                {receipt.createdAt.toLocaleTimeString('de-DE', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </AppText>
+            </View>
+            {receipt.comment ? <AppText>„{receipt.comment}“</AppText> : null}
+            <AppText tone="muted">
+              {playing.track.title} — {playing.track.artist}
+            </AppText>
+          </Card>
+          <View style={styles.receipt}>
+            <AppButton label="Fertig" onPress={router.back} />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <ModalHeader title="Playlist bewerten" />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {submission === 'error' && (
+          <StatusBanner
+            tone="error"
+            title="Senden fehlgeschlagen"
+            text="Deine Bewertung bleibt erhalten. Bitte versuche es noch einmal."
+          />
+        )}
         {playing === 'loading' ? (
           <Card accessible accessibilityRole="progressbar" accessibilityLabel="Titel wird geladen">
             <AppText tone="muted">Titel wird geladen …</AppText>
@@ -116,20 +168,6 @@ export default function RateTrackScreen() {
               maxLength={maxCommentLength}
               disabled={locked}
             />
-            {submission === 'error' && (
-              <StatusBanner
-                tone="error"
-                title="Senden fehlgeschlagen"
-                text="Deine Bewertung bleibt erhalten. Bitte versuche es noch einmal."
-              />
-            )}
-            {submission === 'sent' && (
-              <StatusBanner
-                tone="success"
-                title="Bewertung gesendet"
-                text="Danke für dein Feedback."
-              />
-            )}
           </>
         )}
       </ScrollView>
@@ -138,7 +176,13 @@ export default function RateTrackScreen() {
           <AppButton label="Zurück" variant="secondary" onPress={router.back} />
         ) : (
           <AppButton
-            label={submission === 'sending' ? 'Wird gesendet …' : 'Bewertung absenden'}
+            label={
+              submission === 'sending'
+                ? 'Wird gesendet …'
+                : submission === 'error'
+                  ? 'Erneut senden'
+                  : 'Bewertung absenden'
+            }
             onPress={() => {
               void submit();
             }}
@@ -154,4 +198,23 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { flexGrow: 1, padding: screenPadding.listener, gap: spacing.md },
   footer: { padding: screenPadding.listener },
+  confirmation: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: screenPadding.listener,
+    gap: spacing.xxl,
+  },
+  successIcon: {
+    width: touchTarget * 2,
+    height: touchTarget * 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centered: { textAlign: 'center' },
+  receipt: { width: '100%' },
+  receiptHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  receiptTime: { marginLeft: 'auto' },
 });
