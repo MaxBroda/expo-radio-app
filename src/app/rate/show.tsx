@@ -1,9 +1,11 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ModalHeader } from '@/components/modal-header';
-import { AppText, Card, StatusBanner, TextField } from '@/components/ui';
+import { AppButton, AppText, Card, StatusBanner, TextField } from '@/components/ui';
+import { useDemoFlags } from '@/demo/demo-provider';
 import type { Show } from '@/domain/show';
 import { useStations } from '@/stations/stations-provider';
 import { radius, screenPadding, spacing, touchTarget, useTheme } from '@/theme';
@@ -12,9 +14,11 @@ const maxCommentLength = 240;
 
 export default function RateShowScreen() {
   const { playout } = useStations();
+  const { ratingWindowClosed } = useDemoFlags();
   const colors = useTheme();
   const [show, setShow] = useState<Show | 'loading' | 'error'>('loading');
   const [comment, setComment] = useState('');
+  const closed = typeof show !== 'string' && !!show.hostName && ratingWindowClosed;
 
   useEffect(() => {
     let active = true;
@@ -74,7 +78,13 @@ export default function RateShowScreen() {
             </View>
           </Card>
         )}
-        {typeof show !== 'string' && show.hostName && (
+        {closed ? (
+          <StatusBanner
+            tone="info"
+            title="Bewertungsfenster geschlossen"
+            text="Die Moderation kann nur während der Sendung bewertet werden."
+          />
+        ) : typeof show !== 'string' && show.hostName ? (
           <TextField
             label="Kommentar"
             optional
@@ -84,8 +94,13 @@ export default function RateShowScreen() {
             placeholder="Was war gut, was nicht?"
             maxLength={maxCommentLength}
           />
-        )}
+        ) : null}
       </ScrollView>
+      {closed && (
+        <View style={styles.footer}>
+          <AppButton label="Zurück" variant="secondary" onPress={router.back} />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -95,6 +110,7 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, padding: screenPadding.listener, gap: spacing.lg },
   showCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   showDetails: { flex: 1, gap: spacing.xs },
+  footer: { padding: screenPadding.listener },
   avatar: {
     width: touchTarget + spacing.md,
     height: touchTarget + spacing.md,
