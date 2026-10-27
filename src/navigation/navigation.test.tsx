@@ -2,6 +2,12 @@ import { act, screen, userEvent } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { renderRouter } from 'expo-router/testing-library';
 
+import { StubFeedbackHub } from '@/adapters/stub/stub-feedback-hub';
+import { StubPlayout } from '@/adapters/stub/stub-playout';
+import type { RatingId } from '@/domain/rating';
+import { catalog } from '@/seed/catalog';
+import { schedule } from '@/seed/schedule';
+
 const appDir = './src/app';
 
 // renderRouter attaches its helpers to the pending RNTL render, so awaiting it would drop them.
@@ -39,6 +45,35 @@ test('opens rating as modal from now playing', async () => {
   await user.press(screen.getByText('Playlist bewerten'));
 
   expect(app.getPathname()).toBe('/rate/track');
+});
+
+test('finishing a submitted track rating returns to now playing', async () => {
+  const createdAt = new Date(2026, 9, 27, 18, 43);
+  const playout = jest.spyOn(StubPlayout.prototype, 'getNowPlaying').mockResolvedValue({
+    track: catalog[0],
+    startedAt: createdAt,
+    show: schedule.showAt(createdAt),
+  });
+  const feedback = jest
+    .spyOn(StubFeedbackHub.prototype, 'submitRating')
+    .mockImplementation(async (input) => ({ ...input, id: 'rating-test' as RatingId, createdAt }));
+  try {
+    const user = setupUser();
+    const app = await renderApp();
+    await user.press(screen.getByText('Playlist bewerten'));
+    await screen.findByText(catalog[0].title);
+    await user.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+    await user.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+
+    expect(await screen.findByText('Danke, ist angekommen')).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Fertig' }));
+
+    expect(app.getPathname()).toBe('/');
+    expect(feedback).toHaveBeenCalledTimes(1);
+  } finally {
+    playout.mockRestore();
+    feedback.mockRestore();
+  }
 });
 
 test('choosing moderation in the demo sheet shows the studio', async () => {

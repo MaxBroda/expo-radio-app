@@ -77,9 +77,13 @@ test.each(['', 'Guter Mix'])('sends the selected track rating with comment %p', 
     subject: { kind: 'track', trackId: playing.track.id },
     comment: comment || undefined,
   });
-  expect(await screen.findByText('Bewertung gesendet')).toBeOnTheScreen();
-  expect(screen.getByRole('button', { name: 'Bewertung absenden' })).toBeDisabled();
-  expect(screen.getByLabelText(/Kommentar/)).toHaveProp('editable', false);
+  expect(await screen.findByText('Danke, ist angekommen')).toBeOnTheScreen();
+  expect(screen.getByText('4/5')).toBeOnTheScreen();
+  expect(screen.getByText('Nordlicht — Halbmond Kollektiv')).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Fertig' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Bewertung absenden' })).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText(/Kommentar/)).not.toBeOnTheScreen();
+  if (comment) expect(screen.getByText(`„${comment}“`)).toBeOnTheScreen();
 });
 
 test('locks the form and prevents duplicate requests while sending', async () => {
@@ -103,7 +107,7 @@ test('locks the form and prevents duplicate requests while sending', async () =>
   expect(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' })).toBeDisabled();
   expect(screen.getByLabelText(/Kommentar/)).toHaveProp('editable', false);
   await act(async () => finish());
-  expect(await screen.findByText('Bewertung gesendet')).toBeOnTheScreen();
+  expect(await screen.findByText('Danke, ist angekommen')).toBeOnTheScreen();
 });
 
 test('keeps the rating after a failed send and allows retrying', async () => {
@@ -118,9 +122,9 @@ test('keeps the rating after a failed send and allows retrying', async () => {
   expect(await screen.findByText('Senden fehlgeschlagen')).toBeOnTheScreen();
   expect(screen.getByText('2 von 5 · naja')).toBeOnTheScreen();
   expect(screen.getByLabelText(/Kommentar/)).toHaveDisplayValue('Zu langsam');
-  expect(screen.getByRole('button', { name: 'Bewertung absenden' })).toBeEnabled();
-  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
-  expect(await screen.findByText('Bewertung gesendet')).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Erneut senden' })).toBeEnabled();
+  await userEvent.press(screen.getByRole('button', { name: 'Erneut senden' }));
+  expect(await screen.findByText('Danke, ist angekommen')).toBeOnTheScreen();
   expect(screen.queryByText('Senden fehlgeschlagen')).not.toBeOnTheScreen();
   expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(2);
 });
@@ -152,4 +156,25 @@ test('shows an already rated notice instead of offering another send', async () 
   expect(screen.queryByLabelText(/Kommentar/)).not.toBeOnTheScreen();
   expect(screen.queryByText('Senden fehlgeschlagen')).not.toBeOnTheScreen();
   expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(1);
+});
+
+test('shows the saved rating returned by the hub in the confirmation', async () => {
+  const stations = await renderTrack(() => Promise.resolve(playing));
+  jest.mocked(stations.feedbackHub.submitRating).mockResolvedValueOnce({
+    ...savedRating({ score: 3, subject: { kind: 'track', trackId: playing.track.id } }),
+    comment: 'Guter Mix',
+    createdAt: new Date(2026, 9, 26, 18, 43),
+  });
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await fireEvent.changeText(screen.getByLabelText(/Kommentar/), ' Guter Mix ');
+
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+
+  expect(await screen.findByText('Danke, ist angekommen')).toBeOnTheScreen();
+  expect(screen.getByText('3/5')).toBeOnTheScreen();
+  expect(screen.getByText('„Guter Mix“')).toBeOnTheScreen();
+  expect(screen.getByText('18:43')).toBeOnTheScreen();
+  expect(screen.queryByRole('radiogroup')).not.toBeOnTheScreen();
+  expect(screen.queryByText('4/5')).not.toBeOnTheScreen();
 });
