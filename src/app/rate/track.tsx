@@ -136,16 +136,25 @@ export default function RateTrackScreen() {
         ) : playing === 'error' ? (
           <StatusBanner tone="error" title="Titel gerade nicht verfügbar" />
         ) : (
-          <Card>
-            <AppText variant="headline">{playing.track.title}</AppText>
-            <AppText tone="secondary">{playing.track.artist}</AppText>
-            <AppText variant="mono" tone="muted">
-              läuft seit{' '}
-              {playing.startedAt.toLocaleTimeString('de-DE', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </AppText>
+          <Card style={styles.trackCard}>
+            <View
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={[styles.cover, { backgroundColor: colors.surface.raised }]}
+            >
+              <View style={[styles.coverCircle, { backgroundColor: colors.accent.base }]} />
+            </View>
+            <View style={styles.trackDetails}>
+              <AppText variant="headline">{playing.track.title}</AppText>
+              <AppText tone="secondary">{playing.track.artist}</AppText>
+              <AppText variant="mono" tone="muted">
+                läuft seit{' '}
+                {playing.startedAt.toLocaleTimeString('de-DE', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </AppText>
+            </View>
           </Card>
         )}
         {submission === 'alreadyRated' ? (
@@ -198,6 +207,22 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { flexGrow: 1, padding: screenPadding.listener, gap: spacing.md },
   footer: { padding: screenPadding.listener },
+  trackCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  trackDetails: { flex: 1, gap: spacing.xs },
+  cover: {
+    width: touchTarget + spacing.md,
+    height: touchTarget + spacing.md,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+  },
+  coverCircle: {
+    position: 'absolute',
+    width: touchTarget + spacing.sm,
+    height: touchTarget + spacing.sm,
+    borderRadius: radius.pill,
+    left: -spacing.sm,
+    bottom: -spacing.md,
+  },
   confirmation: {
     flexGrow: 1,
     justifyContent: 'center',
