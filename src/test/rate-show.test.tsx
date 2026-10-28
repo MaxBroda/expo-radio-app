@@ -55,6 +55,7 @@ test('does not invent a host for an unmoderated show', async () => {
   expect(screen.getByText('Nachtschiene')).toBeOnTheScreen();
   expect(screen.getByText('23:00 – 06:00')).toBeOnTheScreen();
   expect(screen.queryByLabelText(/Kommentar/)).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Sternebewertung')).not.toBeOnTheScreen();
 });
 
 test('shows an error when the current show is unavailable', async () => {
@@ -92,21 +93,35 @@ test('allows an optional comment up to 240 characters', async () => {
   expect(screen.getByText('12/240')).toBeOnTheScreen();
 });
 
+test('allows selecting and changing the moderation rating', async () => {
+  await renderShow(() => Promise.resolve(playing));
+  await screen.findByText('Lena Osterkamp');
+  expect(screen.getByText('Noch nicht bewertet')).toBeOnTheScreen();
+
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  expect(screen.getByText('4 von 5 · gut')).toBeOnTheScreen();
+  await userEvent.press(screen.getByRole('radio', { name: '2 von 5 Sternen: naja' }));
+  expect(screen.getByText('2 von 5 · naja')).toBeOnTheScreen();
+});
+
 test('shows the closed-window demo state and restores the comment when reopened', async () => {
   const settings = await renderShow(() => Promise.resolve(playing));
   await screen.findByText('Lena Osterkamp');
   await fireEvent.changeText(screen.getByLabelText(/Kommentar/), 'Gute Sendung');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
 
   await act(() => settings.set({ ratingWindowClosed: true }));
 
   expect(screen.getByText('Bewertungsfenster geschlossen')).toBeOnTheScreen();
   expect(screen.getByText('Lena Osterkamp')).toBeOnTheScreen();
   expect(screen.queryByLabelText(/Kommentar/)).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Sternebewertung')).not.toBeOnTheScreen();
   expect(screen.getAllByRole('button', { name: 'Zurück' })).toHaveLength(2);
 
   await act(() => settings.set({ ratingWindowClosed: false }));
   expect(screen.queryByText('Bewertungsfenster geschlossen')).not.toBeOnTheScreen();
   expect(screen.getByLabelText(/Kommentar/)).toHaveDisplayValue('Gute Sendung');
+  expect(screen.getByText('4 von 5 · gut')).toBeOnTheScreen();
 });
 
 test('the closed-window back button returns to the previous screen', async () => {

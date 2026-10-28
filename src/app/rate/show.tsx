@@ -4,8 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ModalHeader } from '@/components/modal-header';
+import { RatingStars } from '@/components/rating-stars';
 import { AppButton, AppText, Card, StatusBanner, TextField } from '@/components/ui';
 import { useDemoFlags } from '@/demo/demo-provider';
+import type { Score } from '@/domain/rating';
 import type { Show } from '@/domain/show';
 import { useStations } from '@/stations/stations-provider';
 import { radius, screenPadding, spacing, touchTarget, useTheme } from '@/theme';
@@ -19,6 +21,7 @@ export default function RateShowScreen() {
   const [show, setShow] = useState<Show | 'loading' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [comment, setComment] = useState('');
+  const [score, setScore] = useState<Score>();
   const closed = typeof show !== 'string' && !!show.hostName && ratingWindowClosed;
 
   useEffect(() => {
@@ -96,15 +99,18 @@ export default function RateShowScreen() {
             text="Die Moderation kann nur während der Sendung bewertet werden."
           />
         ) : typeof show !== 'string' && show.hostName ? (
-          <TextField
-            label="Kommentar"
-            optional
-            multiline
-            value={comment}
-            onChangeText={setComment}
-            placeholder="Was war gut, was nicht?"
-            maxLength={maxCommentLength}
-          />
+          <>
+            <RatingStars value={score} onChange={setScore} />
+            <TextField
+              label="Kommentar"
+              optional
+              multiline
+              value={comment}
+              onChangeText={setComment}
+              placeholder="Was war gut, was nicht?"
+              maxLength={maxCommentLength}
+            />
+          </>
         ) : null}
       </ScrollView>
       {closed && (
