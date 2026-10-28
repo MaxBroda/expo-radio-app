@@ -3,7 +3,7 @@ import { createContext, use, useSyncExternalStore, type PropsWithChildren } from
 import { schedule } from '@/seed/schedule';
 
 import type { DemoClock } from './demo-clock';
-import type { DemoSettings } from './demo-settings';
+import { defaultFlags, type DemoSettings } from './demo-settings';
 
 type Demo = { clock: DemoClock; settings: DemoSettings };
 
@@ -24,6 +24,7 @@ export function useDemoFlags() {
   return useSyncExternalStore(
     (listener) => settings.subscribe(listener),
     () => settings.get(),
+    () => defaultFlags,
   );
 }
 
@@ -33,5 +34,6 @@ export function useDemoSlot() {
   return useSyncExternalStore(
     (listener) => clock.subscribe(listener),
     () => schedule.slotAt(clock.now()),
+    () => schedule.slot('feierabend'),
   );
 }
