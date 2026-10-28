@@ -135,6 +135,18 @@ test('allows an optional comment up to 240 characters', async () => {
   expect(screen.getByText('12/240')).toBeOnTheScreen();
 });
 
+test('does not submit a comment over 240 characters', async () => {
+  const send = jest.fn(() => new Promise<Rating>(() => {}));
+  await renderShow(() => Promise.resolve(playing), new DemoSettings(), send);
+  await screen.findByText('Lena Osterkamp');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await fireEvent.changeText(screen.getByLabelText(/Kommentar/), 'a'.repeat(241));
+  const button = screen.getByRole('button', { name: 'Bewertung absenden' });
+  expect(button).toBeDisabled();
+  await fireEvent.press(button);
+  expect(send).not.toHaveBeenCalled();
+});
+
 test('allows selecting and changing the moderation rating', async () => {
   await renderShow(() => Promise.resolve(playing));
   await screen.findByText('Lena Osterkamp');
