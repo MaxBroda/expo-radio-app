@@ -6,6 +6,7 @@ import { DemoClock } from '@/demo/demo-clock';
 import { DemoProvider } from '@/demo/demo-provider';
 import { DemoSettings } from '@/demo/demo-settings';
 import type { NowPlaying } from '@/domain/now-playing';
+import type { Rating, RatingInput } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
 import { schedule } from '@/seed/schedule';
 import { createStubStations } from '@/stations/stations';
@@ -20,9 +21,14 @@ const playing: NowPlaying = {
   show: schedule.showAt(startedAt),
 };
 
-async function renderShow(result: () => Promise<NowPlaying>, settings = new DemoSettings()) {
+async function renderShow(
+  result: () => Promise<NowPlaying>,
+  settings = new DemoSettings(),
+  submit?: (input: RatingInput) => Promise<Rating>,
+) {
   const stations = createStubStations();
   stations.playout.getNowPlaying = jest.fn(result);
+  if (submit) stations.feedbackHub.submitRating = submit;
   await renderWithTheme(
     <DemoProvider clock={new DemoClock(startedAt)} settings={settings}>
       <StationsProvider stations={stations}>
@@ -37,6 +43,42 @@ test('shows a loading state while the current show is pending', async () => {
   await renderShow(() => new Promise(() => {}));
 
   expect(screen.getByRole('progressbar', { name: 'Sendung wird geladen' })).toBeOnTheScreen();
+});
+
+test('sends a show rating, preserves it after an error and shows the returned confirmation', async () => {
+  const send = jest.fn(async (input: RatingInput): Promise<Rating> => {
+    if (send.mock.calls.length === 1) throw new Error('unavailable');
+    return { ...input, id: 'rating-1' as Rating['id'], createdAt: startedAt };
+  });
+  await renderShow(() => Promise.resolve(playing), new DemoSettings(), send);
+  await screen.findByText('Lena Osterkamp');
+  expect(screen.getByRole('button', { name: 'Bewertung absenden' })).toBeDisabled();
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await fireEvent.changeText(screen.getByLabelText(/Kommentar/), 'Gute Sendung');
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  expect(await screen.findByText('Senden fehlgeschlagen')).toBeOnTheScreen();
+  expect(screen.getByLabelText(/Kommentar/)).toHaveDisplayValue('Gute Sendung');
+  expect(screen.getByText('4 von 5 · gut')).toBeOnTheScreen();
+  await userEvent.press(screen.getByRole('button', { name: 'Erneut senden' }));
+  expect(await screen.findByText('Danke, ist angekommen')).toBeOnTheScreen();
+  expect(screen.getByText('4/5')).toBeOnTheScreen();
+  expect(screen.getByText('„Gute Sendung“')).toBeOnTheScreen();
+  expect(send).toHaveBeenCalledTimes(2);
+  expect(send).toHaveBeenLastCalledWith({
+    score: 4,
+    comment: 'Gute Sendung',
+    subject: { kind: 'show', showId: playing.show.id },
+  });
+});
+
+test('prevents a second submission while the first is pending', async () => {
+  const send = jest.fn(() => new Promise<Rating>(() => {}));
+  await renderShow(() => Promise.resolve(playing), new DemoSettings(), send);
+  await screen.findByText('Lena Osterkamp');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  expect(screen.getByRole('button', { name: 'Wird gesendet …' })).toBeDisabled();
+  expect(send).toHaveBeenCalledTimes(1);
 });
 
 test('shows the current host, show and broadcast time', async () => {
