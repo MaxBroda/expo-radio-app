@@ -65,6 +65,21 @@ test('shows an error when the current show is unavailable', async () => {
   expect(screen.queryByLabelText(/Kommentar/)).not.toBeOnTheScreen();
 });
 
+test('retries loading the show after an error', async () => {
+  const load = jest
+    .fn<Promise<NowPlaying>, []>()
+    .mockRejectedValueOnce(new Error('unavailable'))
+    .mockResolvedValueOnce(playing);
+  await renderShow(load);
+  await screen.findByText('Sendung gerade nicht verfügbar');
+
+  await userEvent.press(screen.getByRole('button', { name: 'Erneut versuchen' }));
+
+  expect(await screen.findByText('Lena Osterkamp')).toBeOnTheScreen();
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(screen.queryByText('Sendung gerade nicht verfügbar')).not.toBeOnTheScreen();
+});
+
 test('allows an optional comment up to 240 characters', async () => {
   await renderShow(() => Promise.resolve(playing));
   await screen.findByText('Lena Osterkamp');

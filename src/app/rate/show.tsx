@@ -17,6 +17,7 @@ export default function RateShowScreen() {
   const { ratingWindowClosed } = useDemoFlags();
   const colors = useTheme();
   const [show, setShow] = useState<Show | 'loading' | 'error'>('loading');
+  const [attempt, setAttempt] = useState(0);
   const [comment, setComment] = useState('');
   const closed = typeof show !== 'string' && !!show.hostName && ratingWindowClosed;
 
@@ -33,7 +34,7 @@ export default function RateShowScreen() {
     return () => {
       active = false;
     };
-  }, [playout]);
+  }, [playout, attempt]);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -48,7 +49,17 @@ export default function RateShowScreen() {
             <AppText tone="muted">Sendung wird geladen …</AppText>
           </Card>
         ) : show === 'error' ? (
-          <StatusBanner tone="error" title="Sendung gerade nicht verfügbar" />
+          <>
+            <StatusBanner tone="error" title="Sendung gerade nicht verfügbar" />
+            <AppButton
+              label="Erneut versuchen"
+              variant="secondary"
+              onPress={() => {
+                setShow('loading');
+                setAttempt((previous) => previous + 1);
+              }}
+            />
+          </>
         ) : (
           <Card style={styles.showCard}>
             {show.hostName && (
