@@ -49,6 +49,7 @@ export default function RateShowScreen() {
       !show.hostName ||
       closed ||
       score === undefined ||
+      comment.length > maxCommentLength ||
       submitLocked.current
     )
       return;
@@ -209,7 +210,9 @@ export default function RateShowScreen() {
             onPress={() => {
               void submit();
             }}
-            disabled={score === undefined || submission === 'sending'}
+            disabled={
+              score === undefined || comment.length > maxCommentLength || submission === 'sending'
+            }
           />
         </View>
       )}
