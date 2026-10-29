@@ -5,8 +5,8 @@ import type { TrackId } from '@/domain/track';
 
 import { hasRatedOnDevice } from './rating-history';
 
-type RatingTarget = { kind: 'track'; trackId: TrackId } | { kind: 'show'; show: Show };
-type RatingEligibility = 'allowed' | 'alreadyRated' | 'windowClosed' | 'unmoderated';
+export type RatingTarget = { kind: 'track'; trackId: TrackId } | { kind: 'show'; show: Show };
+export type RatingEligibility = 'allowed' | 'alreadyRated' | 'windowClosed' | 'unmoderated';
 
 export async function checkRatingEligibility(
   target: RatingTarget,
