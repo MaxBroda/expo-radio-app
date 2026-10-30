@@ -37,6 +37,22 @@ test('sends a permitted rating and blocks another after remembering it', async (
   expect(send).toHaveBeenCalledTimes(1);
 });
 
+test('a new submission flow reads the saved rating', async () => {
+  const send = jest.fn(async (input: RatingInput) => makeRating(input));
+  const feedbackHub: FeedbackHub = { submitRating: send, list: jest.fn() };
+  const firstFlow = createRatingSubmission(feedbackHub);
+  expect(await firstFlow.submit(track, 4, undefined, () => now)).toMatchObject({
+    status: 'sent',
+    remembered: true,
+  });
+
+  const newFlow = createRatingSubmission(feedbackHub);
+  expect(await newFlow.submit(track, 4, undefined, () => now)).toEqual({
+    status: 'alreadyRated',
+  });
+  expect(send).toHaveBeenCalledTimes(1);
+});
+
 test('does not send an already rated track or a show outside its window', async () => {
   const send = jest.fn(async (input: RatingInput) => makeRating(input));
   const flow = createRatingSubmission({ submitRating: send, list: jest.fn() });
