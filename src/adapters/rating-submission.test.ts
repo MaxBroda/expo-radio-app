@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { DemoClock } from '@/demo/demo-clock';
 import type { Rating, RatingInput } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
 import type { FeedbackHub } from '@/ports/feedback-hub';
@@ -74,6 +75,25 @@ test('checks the show window again after reading local history', async () => {
     status: 'windowClosed',
   });
   expect(send).not.toHaveBeenCalled();
+});
+
+test('uses the current demo time when submitting a show rating', async () => {
+  const send = jest.fn(async (input: RatingInput) => makeRating(input));
+  const flow = createRatingSubmission({ submitRating: send, list: jest.fn() });
+  const show = schedule.showAt(now);
+  const clock = new DemoClock(show.endsAt, () => 0);
+
+  expect(await flow.submit({ kind: 'show', show }, 3, undefined, () => clock.now())).toEqual({
+    status: 'windowClosed',
+  });
+  expect(send).not.toHaveBeenCalled();
+
+  clock.jumpTo(now);
+  expect(await flow.submit({ kind: 'show', show }, 3, undefined, () => clock.now())).toMatchObject({
+    status: 'sent',
+    remembered: true,
+  });
+  expect(send).toHaveBeenCalledTimes(1);
 });
 
 test('sends an eligible show using its broadcast id', async () => {
