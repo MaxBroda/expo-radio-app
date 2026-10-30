@@ -1,13 +1,21 @@
-import { NotImplementedError } from '@/domain/errors';
-import type { Rating, RatingInput } from '@/domain/rating';
+import type { Rating, RatingId, RatingInput } from '@/domain/rating';
 import type { FeedbackHub } from '@/ports/feedback-hub';
 
 export class StubFeedbackHub implements FeedbackHub {
-  async submitRating(_input: RatingInput): Promise<Rating> {
-    throw new NotImplementedError('FeedbackHub.submitRating');
+  private ratings: Rating[] = [];
+  private nextId = 1;
+
+  async submitRating(input: RatingInput): Promise<Rating> {
+    const rating: Rating = {
+      ...input,
+      id: `rating-${this.nextId++}` as RatingId,
+      createdAt: new Date(),
+    };
+    this.ratings.unshift(rating);
+    return rating;
   }
 
   async list(): Promise<Rating[]> {
-    throw new NotImplementedError('FeedbackHub.list');
+    return [...this.ratings];
   }
 }
