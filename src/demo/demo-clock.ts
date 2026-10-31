@@ -16,6 +16,7 @@ export function demoMoment(slot: Slot): Date {
 export class DemoClock {
   private anchor: number;
   private anchoredAt: number;
+  private jumps = 0;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -30,9 +31,14 @@ export class DemoClock {
     return new Date(this.anchor + this.realNow() - this.anchoredAt);
   }
 
+  get revision(): number {
+    return this.jumps;
+  }
+
   jumpTo(date: Date) {
     this.anchor = date.getTime();
     this.anchoredAt = this.realNow();
+    this.jumps++;
     this.listeners.forEach((listener) => listener());
   }
 
