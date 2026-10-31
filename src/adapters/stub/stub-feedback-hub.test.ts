@@ -39,7 +39,7 @@ test('uses demo time and clears ratings when the clock jumps', async () => {
   const initial = await hub.list();
   const first = await hub.submitRating(input);
   expect(first.createdAt).toEqual(start);
-  elapsed += 60_000;
+  elapsed += 30_000;
   expect(await hub.list()).toEqual([first, ...initial]);
 
   const newTime = new Date(2026, 9, 15, 20, 42);
@@ -53,6 +53,27 @@ test('uses demo time and clears ratings when the clock jumps', async () => {
   expect(second.createdAt).toEqual(newTime);
   expect(second.id).not.toBe(first.id);
   expect(await hub.list()).toEqual([second, ...afterJump]);
+});
+
+test('adds demo ratings as time passes and keeps submitted ratings', async () => {
+  let elapsed = 0;
+  const clock = new DemoClock(new Date(2026, 9, 15, 18, 42), () => elapsed);
+  const hub = new StubFeedbackHub(clock);
+  const first = await hub.submitRating({
+    subject: { kind: 'track', trackId: 'track-1' as TrackId },
+    score: 4,
+  });
+  const initial = await hub.list();
+
+  elapsed += 120_000;
+  const updated = await hub.list();
+  expect(updated).toHaveLength(initial.length + 2);
+  expect(updated[0].createdAt).toEqual(clock.now());
+  expect(updated).toContainEqual(first);
+  expect(await hub.list()).toEqual(updated);
+  expect(updated.map((rating) => rating.createdAt.getTime())).toEqual(
+    updated.map((rating) => rating.createdAt.getTime()).sort((a, b) => b - a),
+  );
 });
 
 function makeClockAt(date: Date) {

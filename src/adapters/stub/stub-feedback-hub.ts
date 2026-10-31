@@ -11,6 +11,8 @@ export class StubFeedbackHub implements FeedbackHub {
   private ratings: Rating[] = [];
   private nextId = 1;
   private clockRevision: number;
+  private demoRatings!: DemoRatings;
+  private nextDemoRatingAt = 0;
 
   constructor(private readonly clock: DemoClock) {
     this.clockRevision = clock.revision;
@@ -19,13 +21,21 @@ export class StubFeedbackHub implements FeedbackHub {
 
   private seedRatings() {
     const rotation = new Rotation(catalog, schedule, demoDay);
-    this.ratings = new DemoRatings(rotation, schedule, new Random(42)).seed(this.clock.now());
+    this.demoRatings = new DemoRatings(rotation, schedule, new Random(42));
+    const now = this.clock.now();
+    this.ratings = this.demoRatings.seed(now);
+    this.nextDemoRatingAt = now.getTime() + 60_000;
   }
 
   private checkClock() {
     if (this.clockRevision !== this.clock.revision) {
       this.seedRatings();
       this.clockRevision = this.clock.revision;
+    }
+    const now = this.clock.now().getTime();
+    while (this.nextDemoRatingAt <= now) {
+      this.ratings.unshift(this.demoRatings.next(new Date(this.nextDemoRatingAt)));
+      this.nextDemoRatingAt += 60_000;
     }
   }
 
