@@ -22,8 +22,8 @@ import { fontAssets, ThemeProvider, useColorSchemePreference, useTheme } from '@
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [stations] = useState(createStubStations);
   const [clock] = useState(() => new DemoClock(demoMoment(schedule.slot('feierabend'))));
+  const [stations] = useState(() => createStubStations(clock));
   const [settings] = useState(() => new DemoSettings());
   const [fontsLoaded, fontError] = useFonts(fontAssets);
   const ready = fontsLoaded || fontError !== null;
