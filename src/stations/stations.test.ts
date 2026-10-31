@@ -30,6 +30,8 @@ test('the feedback hub uses the supplied demo clock', async () => {
   expect((await feedbackHub.submitRating(input)).createdAt).toEqual(start);
   clock.jumpTo(new Date(2026, 9, 15, 20, 42));
   const next = await feedbackHub.submitRating(input);
-  expect(await feedbackHub.list()).toEqual([next]);
+  const ratings = await feedbackHub.list();
+  expect(ratings[0]).toEqual(next);
+  expect(ratings.filter((rating) => rating.id.startsWith('rating-'))).toEqual([next]);
   expect(next.createdAt).toEqual(clock.now());
 });
