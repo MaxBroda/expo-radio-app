@@ -1,5 +1,6 @@
 import { DemoClock } from '@/demo/demo-clock';
 import { defaultFlags } from '@/demo/demo-settings';
+import type { ShowId } from '@/domain/show';
 import type { TrackId } from '@/domain/track';
 
 import { createStubStations } from './stations';
@@ -34,4 +35,21 @@ test('the feedback hub uses the supplied demo clock', async () => {
   expect(ratings[0]).toEqual(next);
   expect(ratings.filter((rating) => rating.id.startsWith('rating-'))).toEqual([next]);
   expect(next.createdAt).toEqual(clock.now());
+});
+
+test('a submitted rating is available through the station feedback hub', async () => {
+  const stations = createStubStations();
+  const trackRating = await stations.feedbackHub.submitRating({
+    subject: { kind: 'track', trackId: 'track-1' as TrackId },
+    score: 5,
+    comment: 'Gut',
+  });
+  const showRating = await stations.feedbackHub.submitRating({
+    subject: { kind: 'show', showId: 'show-1' as ShowId },
+    score: 4,
+  });
+
+  const studioRatings = await stations.feedbackHub.list();
+  expect(studioRatings).toContainEqual(trackRating);
+  expect(studioRatings).toContainEqual(showRating);
 });
