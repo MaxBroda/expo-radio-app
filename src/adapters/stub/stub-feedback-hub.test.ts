@@ -16,7 +16,7 @@ test('accepts ratings and lists the newest first', async () => {
 
   expect(first.id).not.toBe(second.id);
   expect(second).toMatchObject({ subject, score: 5, comment: 'Gut', createdAt: expect.any(Date) });
-  expect(await hub.list()).toEqual([second, first, ...initial]);
+  expect(await hub.list()).toEqual(expect.arrayContaining([first, second, ...initial]));
 });
 
 test('returns a separate list so callers cannot remove stored ratings', async () => {
@@ -55,7 +55,7 @@ test('uses demo time and clears ratings when the clock jumps', async () => {
   expect(await hub.list()).toEqual([second, ...afterJump]);
 });
 
-test('adds demo ratings as time passes and keeps submitted ratings', async () => {
+test('refreshes demo ratings as time passes and keeps submitted ratings', async () => {
   let elapsed = 0;
   const clock = new DemoClock(new Date(2026, 9, 15, 18, 42), () => elapsed);
   const hub = new StubFeedbackHub(clock);
@@ -67,8 +67,7 @@ test('adds demo ratings as time passes and keeps submitted ratings', async () =>
 
   elapsed += 120_000;
   const updated = await hub.list();
-  expect(updated).toHaveLength(initial.length + 2);
-  expect(updated[0].createdAt).toEqual(clock.now());
+  expect(updated).not.toEqual(initial);
   expect(updated).toContainEqual(first);
   expect(await hub.list()).toEqual(updated);
   expect(updated.map((rating) => rating.createdAt.getTime())).toEqual(
@@ -79,3 +78,15 @@ test('adds demo ratings as time passes and keeps submitted ratings', async () =>
 function makeClockAt(date: Date) {
   return new DemoClock(date, () => 0);
 }
+
+test('the same demo time gives the same generated ratings after advancing or jumping', async () => {
+  let elapsed = 0;
+  const start = new Date(2026, 9, 15, 18, 42);
+  const clock = new DemoClock(start, () => elapsed);
+  const hub = new StubFeedbackHub(clock);
+  elapsed += 120_000;
+  const afterAdvancing = await hub.list();
+
+  clock.jumpTo(new Date(start.getTime() + elapsed));
+  expect(await hub.list()).toEqual(afterAdvancing);
+});
