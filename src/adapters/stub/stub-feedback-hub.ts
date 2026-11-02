@@ -11,10 +11,10 @@ import { schedule } from '@/seed/schedule';
 
 export class StubFeedbackHub implements FeedbackHub {
   private ratings: Rating[] = [];
+  private submittedRatings: Rating[] = [];
   private nextId = 1;
   private clockRevision: number;
-  private demoRatings!: DemoRatings;
-  private nextDemoRatingAt = 0;
+  private demoMinute = 0;
 
   constructor(
     private readonly clock: DemoClock,
@@ -26,21 +26,21 @@ export class StubFeedbackHub implements FeedbackHub {
 
   private seedRatings() {
     const rotation = new Rotation(catalog, schedule, demoDay);
-    this.demoRatings = new DemoRatings(rotation, schedule, new Random(42));
-    const now = this.clock.now();
-    this.ratings = this.demoRatings.seed(now);
-    this.nextDemoRatingAt = now.getTime() + 60_000;
+    const generator = new DemoRatings(rotation, schedule, new Random(42));
+    this.demoMinute = Math.floor(this.clock.now().getTime() / 60_000);
+    this.ratings = generator.seed(new Date(this.demoMinute * 60_000)).map((rating) => ({
+      ...rating,
+      id: `${rating.id}-${this.demoMinute}` as RatingId,
+    }));
   }
 
   private checkClock() {
     if (this.clockRevision !== this.clock.revision) {
+      this.submittedRatings = [];
       this.seedRatings();
       this.clockRevision = this.clock.revision;
-    }
-    const now = this.clock.now().getTime();
-    while (this.nextDemoRatingAt <= now) {
-      this.ratings.unshift(this.demoRatings.next(new Date(this.nextDemoRatingAt)));
-      this.nextDemoRatingAt += 60_000;
+    } else if (Math.floor(this.clock.now().getTime() / 60_000) !== this.demoMinute) {
+      this.seedRatings();
     }
   }
 
@@ -52,12 +52,14 @@ export class StubFeedbackHub implements FeedbackHub {
       id: `rating-${this.nextId++}` as RatingId,
       createdAt: this.clock.now(),
     };
-    this.ratings.unshift(rating);
+    this.submittedRatings.unshift(rating);
     return rating;
   }
 
   async list(): Promise<Rating[]> {
     this.checkClock();
-    return [...this.ratings];
+    return [...this.ratings, ...this.submittedRatings].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
   }
 }
