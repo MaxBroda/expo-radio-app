@@ -1,5 +1,6 @@
 import { DemoClock } from '@/demo/demo-clock';
-import { defaultFlags } from '@/demo/demo-settings';
+import { defaultFlags, DemoSettings } from '@/demo/demo-settings';
+import { StationUnavailableError } from '@/domain/errors';
 import type { ShowId } from '@/domain/show';
 import type { TrackId } from '@/domain/track';
 
@@ -52,4 +53,20 @@ test('a submitted rating is available through the station feedback hub', async (
   const studioRatings = await stations.feedbackHub.list();
   expect(studioRatings).toContainEqual(trackRating);
   expect(studioRatings).toContainEqual(showRating);
+});
+
+test('the demo send failure does not save a rating and allows retry', async () => {
+  const clock = new DemoClock(new Date(2026, 9, 15, 18, 42), () => 0);
+  const settings = new DemoSettings();
+  const { feedbackHub } = createStubStations(undefined, clock, settings);
+  const input = { subject: { kind: 'track', trackId: 'track-1' as TrackId }, score: 4 } as const;
+  const before = await feedbackHub.list();
+
+  settings.set({ sendFails: true });
+  await expect(feedbackHub.submitRating(input)).rejects.toBeInstanceOf(StationUnavailableError);
+  expect(await feedbackHub.list()).toEqual(before);
+
+  settings.set({ sendFails: false });
+  const rating = await feedbackHub.submitRating(input);
+  expect(await feedbackHub.list()).toContainEqual(rating);
 });
