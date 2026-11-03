@@ -7,14 +7,14 @@ import {
   type RatingEligibility,
   type RatingTarget,
 } from './rating-eligibility';
-import { rememberRatingOnDevice } from './rating-history';
+import { rememberRatingOnDevice, type HistoryScope } from './rating-history';
 import { submitRatingAndRemember } from './submit-rating';
 
 type Result =
   | { status: Exclude<RatingEligibility, 'allowed'> | 'busy' | 'awaitingLocalSave' }
   | { status: 'sent'; rating: Rating; remembered: boolean };
 
-export function createRatingSubmission(feedbackHub: FeedbackHub) {
+export function createRatingSubmission(feedbackHub: FeedbackHub, scope: HistoryScope = 'device') {
   let busy = false;
   let pendingRating: Rating | undefined;
 
@@ -28,7 +28,7 @@ export function createRatingSubmission(feedbackHub: FeedbackHub) {
     if (pendingRating) return { status: 'awaitingLocalSave' };
     busy = true;
     try {
-      const eligibility = await checkRatingEligibility(target, now());
+      const eligibility = await checkRatingEligibility(target, now(), scope);
       if (eligibility !== 'allowed') return { status: eligibility };
       if (target.kind === 'show' && !isShowRatingOpen(target.show, now()))
         return { status: 'windowClosed' };
@@ -36,7 +36,7 @@ export function createRatingSubmission(feedbackHub: FeedbackHub) {
         target.kind === 'track'
           ? { kind: 'track', trackId: target.trackId }
           : { kind: 'show', showId: target.show.id };
-      const result = await submitRatingAndRemember(feedbackHub, { score, comment, subject });
+      const result = await submitRatingAndRemember(feedbackHub, { score, comment, subject }, scope);
       if (!result.remembered) pendingRating = result.rating;
       return { status: 'sent', ...result };
     } finally {
@@ -48,7 +48,7 @@ export function createRatingSubmission(feedbackHub: FeedbackHub) {
     if (busy || !pendingRating) return false;
     busy = true;
     try {
-      await rememberRatingOnDevice(pendingRating.subject);
+      await rememberRatingOnDevice(pendingRating.subject, scope);
       pendingRating = undefined;
       return true;
     } catch {

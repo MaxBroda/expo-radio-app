@@ -6,7 +6,7 @@ import type { TrackId } from '@/domain/track';
 import type { FeedbackHub } from '@/ports/feedback-hub';
 import { schedule } from '@/seed/schedule';
 
-import { rememberRatingOnDevice } from './rating-history';
+import { clearDemoRatingHistory, hasRatedOnDevice, rememberRatingOnDevice } from './rating-history';
 import { createRatingSubmission } from './rating-submission';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -51,6 +51,40 @@ test('a new submission flow reads the saved rating', async () => {
   expect(await newFlow.submit(track, 4, undefined, () => now)).toEqual({
     status: 'alreadyRated',
   });
+  expect(send).toHaveBeenCalledTimes(1);
+});
+
+test('demo submission uses separate history and can be rated again after demo reset', async () => {
+  const send = jest.fn(async (input: RatingInput) => makeRating(input));
+  const flow = createRatingSubmission({ submitRating: send, list: jest.fn() }, 'demo');
+  await rememberRatingOnDevice(track);
+
+  expect(await flow.submit(track, 4, undefined, () => now)).toMatchObject({
+    status: 'sent',
+    remembered: true,
+  });
+  expect(await flow.submit(track, 4, undefined, () => now)).toEqual({ status: 'alreadyRated' });
+  await clearDemoRatingHistory();
+  expect(await hasRatedOnDevice(track)).toBe(true);
+  expect(await flow.submit(track, 4, undefined, () => now)).toMatchObject({
+    status: 'sent',
+    remembered: true,
+  });
+  expect(send).toHaveBeenCalledTimes(2);
+});
+
+test('retry after a demo storage failure saves to the demo history', async () => {
+  const send = jest.fn(async (input: RatingInput) => makeRating(input));
+  const flow = createRatingSubmission({ submitRating: send, list: jest.fn() }, 'demo');
+  jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('storage'));
+  expect(await flow.submit(track, 4, undefined, () => now)).toMatchObject({
+    status: 'sent',
+    remembered: false,
+  });
+  expect(await flow.retryLocalSave()).toBe(true);
+  expect(await hasRatedOnDevice(track, 'demo')).toBe(true);
+  expect(await hasRatedOnDevice(track)).toBe(false);
+  expect(await flow.submit(track, 4, undefined, () => now)).toEqual({ status: 'alreadyRated' });
   expect(send).toHaveBeenCalledTimes(1);
 });
 
