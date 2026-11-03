@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { RatingSubject } from '@/domain/rating';
 
-type HistoryScope = 'device' | 'demo';
+export type HistoryScope = 'device' | 'demo';
 
 function keyFor(subject: RatingSubject, scope: HistoryScope): string {
   const id = subject.kind === 'track' ? subject.trackId : subject.showId;
