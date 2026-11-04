@@ -31,3 +31,6 @@ export const problemText: Record<WishProblem, string> = {
   freeTextTooLong: `Die Beschreibung darf höchstens ${wishLimits.freeTextMax} Zeichen lang sein.`,
   greetingTooLong: `Der Gruß darf höchstens ${wishLimits.greetingMax} Zeichen lang sein.`,
 };
+
+export const alreadyRequestedText =
+  'Diesen Titel hast du schon gewünscht. Pro Titel zählt eine Stimme.';

@@ -148,3 +148,25 @@ test('a failed send is no longer reported once the listener comes back with the 
   expect(await screen.findByText('Kontingent erschöpft', {}, wait)).toBeTruthy();
   expect(screen.queryByText('Wunsch nicht gesendet')).toBeNull();
 });
+
+test('a song the listener already supports cannot be pushed with a second wish', async () => {
+  const { user, getPathname } = await setup();
+  await user.press(await screen.findByText('Landungsbrücken raus', {}, wait));
+  await user.press(sendButton());
+  expect(await screen.findByText('25', {}, wait)).toBeTruthy();
+
+  await user.press(screen.getByRole('button', { name: 'Fertig' }));
+  await user.press(await screen.findByText('Landungsbrücken raus', {}, wait));
+  await user.press(sendButton());
+
+  expect(
+    await screen.findByText(
+      'Diesen Titel hast du schon gewünscht. Pro Titel zählt eine Stimme.',
+      {},
+      wait,
+    ),
+  ).toBeTruthy();
+  expect(sendButton()).toBeDisabled();
+  expect(screen.getByText('Noch 2 von 3 Wünschen frei · zurückgesetzt 19:00')).toBeTruthy();
+  expect(getPathname()).toBe('/');
+});
