@@ -17,7 +17,7 @@ export type WishProblem =
 export type WishValidation =
   { ok: true; input: WishInput } | { ok: false; problems: WishProblem[] };
 
-export type WishRejection = WishProblem | 'quotaExhausted';
+export type WishRejection = WishProblem | 'quotaExhausted' | 'alreadyRequested';
 
 export class WishRejectedError extends Error {
   constructor(readonly reason: WishRejection) {
