@@ -74,6 +74,34 @@ test('a jump during sending clears the old local rating before another request',
   flow.dispose();
 });
 
+test('a jump while checking history does not send the old rating', async () => {
+  const clock = new DemoClock(now, () => 0);
+  const send = jest.fn(async (input: RatingInput) => rating(input));
+  const flow = createDemoRatingSubmission({ submitRating: send, list: jest.fn() }, clock);
+  const originalRead = jest.mocked(AsyncStorage.getItem).getMockImplementation()!;
+  let finish!: () => void;
+  let signal!: () => void;
+  const started = new Promise<void>((resolve) => {
+    signal = resolve;
+  });
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  jest.mocked(AsyncStorage.getItem).mockImplementationOnce(async (...args) => {
+    signal();
+    await waiting;
+    return originalRead(...args);
+  });
+
+  const attempt = flow.submit(track, 4);
+  await started;
+  clock.jumpTo(now);
+  finish();
+  expect(await attempt).toEqual({ status: 'demoChanged' });
+  expect(send).not.toHaveBeenCalled();
+  flow.dispose();
+});
+
 test('a failed reset prevents sending until the reset succeeds', async () => {
   const clock = new DemoClock(now, () => 0);
   const send = jest.fn(async (input: RatingInput) => rating(input));
