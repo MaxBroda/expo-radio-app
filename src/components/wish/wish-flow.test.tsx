@@ -42,12 +42,10 @@ async function setup(flags: Partial<DemoFlags> = {}) {
     );
   }
 
-  // renderRouter attaches its helpers to the pending RNTL render, so awaiting it would drop them.
-  const app = renderRouter(
+  const app = await renderRouter(
     { _layout: Layout, index: WishScreen, 'wish/sent': WishSentScreen },
     { initialUrl: '/' },
   );
-  await app;
   const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
   return { user, settings, getPathname: app.getPathname };
 }
