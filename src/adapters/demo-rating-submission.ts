@@ -6,10 +6,14 @@ import type { RatingTarget } from './rating-eligibility';
 import { clearDemoRatingHistory } from './rating-history';
 import { createRatingSubmission } from './rating-submission';
 
-export function createDemoRatingSubmission(feedbackHub: FeedbackHub, clock: DemoClock) {
+export function createDemoRatingSubmission(
+  feedbackHub: FeedbackHub,
+  clock: DemoClock,
+  resetOnStart = false,
+) {
   let flow = createRatingSubmission(feedbackHub, 'demo');
   let revision = 0;
-  let clearedRevision = 0;
+  let clearedRevision = resetOnStart ? -1 : 0;
   let busy = false;
   const unsubscribe = clock.subscribe(() => {
     revision++;
