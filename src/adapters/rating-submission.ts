@@ -11,7 +11,7 @@ import { rememberRatingOnDevice, type HistoryScope } from './rating-history';
 import { submitRatingAndRemember } from './submit-rating';
 
 type Result =
-  | { status: Exclude<RatingEligibility, 'allowed'> | 'busy' | 'awaitingLocalSave' }
+  | { status: Exclude<RatingEligibility, 'allowed'> | 'busy' | 'awaitingLocalSave' | 'demoChanged' }
   | { status: 'sent'; rating: Rating; remembered: boolean };
 
 export function createRatingSubmission(feedbackHub: FeedbackHub, scope: HistoryScope = 'device') {
@@ -23,12 +23,14 @@ export function createRatingSubmission(feedbackHub: FeedbackHub, scope: HistoryS
     score: Score,
     comment: string | undefined,
     now: () => Date,
+    isCurrent: () => boolean = () => true,
   ): Promise<Result> {
     if (busy) return { status: 'busy' };
     if (pendingRating) return { status: 'awaitingLocalSave' };
     busy = true;
     try {
       const eligibility = await checkRatingEligibility(target, now(), scope);
+      if (!isCurrent()) return { status: 'demoChanged' };
       if (eligibility !== 'allowed') return { status: eligibility };
       if (target.kind === 'show' && !isShowRatingOpen(target.show, now()))
         return { status: 'windowClosed' };

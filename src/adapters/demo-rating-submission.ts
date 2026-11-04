@@ -35,7 +35,13 @@ export function createDemoRatingSubmission(
       await clearIfNeeded();
       const started = revision;
       try {
-        const result = await flow.submit(target, score, comment, () => clock.now());
+        const result = await flow.submit(
+          target,
+          score,
+          comment,
+          () => clock.now(),
+          () => started === revision,
+        );
         if (started !== revision) {
           await clearIfNeeded();
           return { status: 'demoChanged' } as const;
