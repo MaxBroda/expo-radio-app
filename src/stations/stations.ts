@@ -4,7 +4,7 @@ import { StubNotificationService } from '@/adapters/stub/stub-notification-servi
 import { StubPlayout } from '@/adapters/stub/stub-playout';
 import { StubWishSystem } from '@/adapters/stub/stub-wish-system';
 import { DemoClock, demoMoment } from '@/demo/demo-clock';
-import { defaultFlags, DemoSettings, type DemoFlags } from '@/demo/demo-settings';
+import { defaultFlags, type DemoFlags } from '@/demo/demo-settings';
 import type { FeedbackHub } from '@/ports/feedback-hub';
 import type { MusicDatabase } from '@/ports/music-database';
 import type { NotificationService } from '@/ports/notification-service';
@@ -27,12 +27,11 @@ const realTime: StubContext = { now: () => new Date(), flags: () => defaultFlags
 export function createStubStations(
   context: StubContext = realTime,
   clock = new DemoClock(demoMoment(schedule.slot('feierabend'))),
-  settings = new DemoSettings(),
 ): Stations {
   return {
     playout: new StubPlayout(),
     musicDatabase: new StubMusicDatabase({ connection: () => context.flags().connection }),
-    feedbackHub: new StubFeedbackHub(clock, settings),
+    feedbackHub: new StubFeedbackHub(clock, { get: context.flags }),
     wishSystem: new StubWishSystem({ now: context.now, flags: context.flags }),
     notifications: new StubNotificationService(),
   };
