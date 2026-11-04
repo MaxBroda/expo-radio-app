@@ -25,7 +25,7 @@ export default function RootLayout() {
   const [clock] = useState(() => new DemoClock(demoMoment(schedule.slot('feierabend'))));
   const [settings] = useState(() => new DemoSettings());
   const [stations] = useState(() =>
-    createStubStations({ now: () => clock.now(), flags: () => settings.get() }, clock, settings),
+    createStubStations({ now: () => clock.now(), flags: () => settings.get() }, clock),
   );
   const [fontsLoaded, fontError] = useFonts(fontAssets);
   const ready = fontsLoaded || fontError !== null;

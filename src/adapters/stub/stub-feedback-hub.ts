@@ -18,7 +18,7 @@ export class StubFeedbackHub implements FeedbackHub {
 
   constructor(
     private readonly clock: DemoClock,
-    private readonly settings = new DemoSettings(),
+    private readonly settings: Pick<DemoSettings, 'get'> = new DemoSettings(),
   ) {
     this.clockRevision = clock.revision;
     this.seedRatings();

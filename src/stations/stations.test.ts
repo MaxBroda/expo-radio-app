@@ -58,7 +58,10 @@ test('a submitted rating is available through the station feedback hub', async (
 test('the demo send failure does not save a rating and allows retry', async () => {
   const clock = new DemoClock(new Date(2026, 9, 15, 18, 42), () => 0);
   const settings = new DemoSettings();
-  const { feedbackHub } = createStubStations(undefined, clock, settings);
+  const { feedbackHub } = createStubStations(
+    { now: () => clock.now(), flags: () => settings.get() },
+    clock,
+  );
   const input = { subject: { kind: 'track', trackId: 'track-1' as TrackId }, score: 4 } as const;
   const before = await feedbackHub.list();
 
