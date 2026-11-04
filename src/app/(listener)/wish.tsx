@@ -8,7 +8,13 @@ import { AppButton, AppText, Skeleton, StatusBanner, TextField } from '@/compone
 import { CoverPlaceholder } from '@/components/wish/cover-placeholder';
 import { QuotaMeter } from '@/components/wish/quota-meter';
 import { useTrackSearch, type TrackSearch } from '@/components/wish/use-track-search';
-import { clockTime, problemText, trackLine, votesLabel } from '@/components/wish/wish-format';
+import {
+  alreadyRequestedText,
+  clockTime,
+  problemText,
+  trackLine,
+  votesLabel,
+} from '@/components/wish/wish-format';
 import { WishOption } from '@/components/wish/wish-option';
 import type { Track } from '@/domain/track';
 import type { Wish, WishedSong } from '@/domain/wish';
@@ -56,6 +62,7 @@ export default function WishScreen() {
   const [unreachable, setUnreachable] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
+  const [alreadyRequested, setAlreadyRequested] = useState(false);
   const search = useTrackSearch(query);
 
   // Quota and list change in the studio and through the demo sheet, so both reload on every visit.
@@ -63,6 +70,7 @@ export default function WishScreen() {
     useCallback(() => {
       let current = true;
       setSendFailed(false);
+      setAlreadyRequested(false);
       Promise.all([wishSystem.quota(), loadPopular(wishSystem, musicDatabase)]).then(
         ([nextQuota, nextPopular]) => {
           if (!current) return;
@@ -81,17 +89,20 @@ export default function WishScreen() {
   const validation = validateWish({ song: choice ? toSong(choice) : undefined, greeting });
   const exhausted = quota?.exhausted ?? false;
   const resetTime = quota ? clockTime(quota.resetsAt) : '';
-  const canSend = quota !== null && !exhausted && !unreachable && validation.ok && !sending;
+  const canSend =
+    quota !== null && !exhausted && !unreachable && validation.ok && !sending && !alreadyRequested;
 
   function changeQuery(text: string) {
     setQuery(text);
     setChoice(null);
     setSendFailed(false);
+    setAlreadyRequested(false);
   }
 
   function choose(next: Choice) {
     setChoice(next);
     setSendFailed(false);
+    setAlreadyRequested(false);
   }
 
   async function send() {
@@ -110,6 +121,8 @@ export default function WishScreen() {
     } catch (error) {
       if (error instanceof WishRejectedError && error.reason === 'quotaExhausted') {
         wishSystem.quota().then(setQuota, () => setUnreachable(true));
+      } else if (error instanceof WishRejectedError && error.reason === 'alreadyRequested') {
+        setAlreadyRequested(true);
       } else {
         setSendFailed(true);
       }
@@ -121,6 +134,8 @@ export default function WishScreen() {
   let hint: { text: string; tone: 'muted' | 'accent' | 'critical' };
   if (exhausted) {
     hint = { text: `Kontingent erschöpft, ab ${resetTime} wieder möglich.`, tone: 'muted' };
+  } else if (alreadyRequested) {
+    hint = { text: alreadyRequestedText, tone: 'critical' };
   } else if (!choice) {
     hint = { text: problemText.songMissing, tone: 'muted' };
   } else if (!validation.ok) {
