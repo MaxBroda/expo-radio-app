@@ -10,14 +10,27 @@ export function createDemoRatingSubmission(
   feedbackHub: FeedbackHub,
   clock: DemoClock,
   resetOnStart = false,
+  subscribeOnCreate = true,
 ) {
   let flow = createRatingSubmission(feedbackHub, 'demo');
   let revision = 0;
   let clearedRevision = resetOnStart ? -1 : 0;
   let busy = false;
-  const unsubscribe = clock.subscribe(() => {
-    revision++;
-  });
+  let unsubscribe: (() => void) | undefined;
+
+  function start() {
+    if (!unsubscribe)
+      unsubscribe = clock.subscribe(() => {
+        revision++;
+      });
+  }
+
+  function dispose() {
+    unsubscribe?.();
+    unsubscribe = undefined;
+  }
+
+  if (subscribeOnCreate) start();
 
   async function clearIfNeeded() {
     while (clearedRevision !== revision) {
@@ -73,5 +86,5 @@ export function createDemoRatingSubmission(
     }
   }
 
-  return { submit, retryLocalSave, dispose: unsubscribe };
+  return { submit, retryLocalSave, start, dispose };
 }
