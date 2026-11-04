@@ -16,6 +16,7 @@ import { DemoSettings } from '@/demo/demo-settings';
 import { RoleProvider, useRole } from '@/role/role-provider';
 import { schedule } from '@/seed/schedule';
 import { createStubStations } from '@/stations/stations';
+import { RatingProvider } from '@/stations/rating-provider';
 import { StationsProvider } from '@/stations/stations-provider';
 import { fontAssets, ThemeProvider, useColorSchemePreference, useTheme } from '@/theme';
 
@@ -40,9 +41,11 @@ export default function RootLayout() {
     <ThemeProvider>
       <DemoProvider clock={clock} settings={settings}>
         <StationsProvider stations={stations}>
-          <RoleProvider>
-            <ThemedNavigation />
-          </RoleProvider>
+          <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
+            <RoleProvider>
+              <ThemedNavigation />
+            </RoleProvider>
+          </RatingProvider>
         </StationsProvider>
       </DemoProvider>
     </ThemeProvider>
