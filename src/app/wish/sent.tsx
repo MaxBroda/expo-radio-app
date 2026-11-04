@@ -110,7 +110,7 @@ export default function WishSentScreen() {
         )
       )}
 
-      <AppButton label="Fertig" onPress={router.back} style={styles.done} />
+      <AppButton label="Fertig" onPress={() => router.back()} style={styles.done} />
       <AppText variant="caption" tone="muted" style={styles.center}>
         Nur in dieser Demo: über den Schalter DEMO oben wechselst du ins Studio und siehst die
         Wunschliste.
