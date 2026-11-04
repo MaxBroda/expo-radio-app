@@ -37,6 +37,18 @@ test('a clock jump clears demo history before the next submission', async () => 
   flow.dispose();
 });
 
+test('a new demo session can clear old demo history without deleting device history', async () => {
+  const clock = new DemoClock(now, () => 0);
+  const send = jest.fn(async (input: RatingInput) => rating(input));
+  await rememberRatingOnDevice(track);
+  await rememberRatingOnDevice(track, 'demo');
+  const flow = createDemoRatingSubmission({ submitRating: send, list: jest.fn() }, clock, true);
+
+  expect(await flow.submit(track, 4)).toMatchObject({ status: 'sent', remembered: true });
+  expect(await hasRatedOnDevice(track)).toBe(true);
+  flow.dispose();
+});
+
 test('a jump during sending clears the old local rating before another request', async () => {
   const clock = new DemoClock(now, () => 0);
   let finish!: (value: Rating) => void;
