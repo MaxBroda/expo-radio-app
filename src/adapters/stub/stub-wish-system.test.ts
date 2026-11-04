@@ -57,15 +57,53 @@ test('input is normalized before it is stored', async () => {
   expect(wish.greeting).toBeUndefined();
 });
 
-test('requesting an open song again adds a vote instead of a second entry', async () => {
+const otherListener = (trackId: string): Wish => ({
+  id: 'w_01' as WishId,
+  song: track(trackId),
+  createdAt: new Date(2026, 9, 15, 18, 0),
+  votes: 4,
+  status: 'open',
+});
+
+test('requesting a song another listener wished for adds a vote instead of a second entry', async () => {
+  const { system } = setup({ wishes: [otherListener('t_0038')] });
+
+  const wish = await system.submitRequest({ song: track('t_0038'), greeting: 'Noch mal' });
+
+  expect(wish.id).toBe('w_01');
+  expect(wish.votes).toBe(5);
+  expect(wish.greeting).toBe('Noch mal');
+  expect(await system.list()).toHaveLength(1);
+});
+
+test('a device can support an open song only once', async () => {
+  const { system } = setup({ wishes: [otherListener('t_0038')] });
+  await system.submitRequest({ song: track('t_0038') });
+
+  await expect(system.submitRequest({ song: track('t_0038') })).rejects.toEqual(
+    new WishRejectedError('alreadyRequested'),
+  );
+  expect((await system.list())[0].votes).toBe(5);
+  expect((await system.quota()).remaining).toBe(2);
+});
+
+test('a device cannot vote for its own wish', async () => {
   const { system } = setup({ wishes: [] });
+  await system.submitRequest({ song: track('t_0038') });
 
-  const first = await system.submitRequest({ song: track('t_0038') });
-  const second = await system.submitRequest({ song: track('t_0038'), greeting: 'Noch mal' });
+  await expect(system.submitRequest({ song: track('t_0038') })).rejects.toEqual(
+    new WishRejectedError('alreadyRequested'),
+  );
+  expect(await system.list()).toHaveLength(1);
+});
 
-  expect(second.id).toBe(first.id);
-  expect(second.votes).toBe(2);
-  expect(second.greeting).toBe('Noch mal');
+test('the same free text from one device is rejected regardless of case', async () => {
+  const { system } = setup({ wishes: [] });
+  await system.submitRequest({ song: { kind: 'freeText', description: 'Pfeifen am Anfang' } });
+
+  await expect(
+    system.submitRequest({ song: { kind: 'freeText', description: 'pfeifen  am anfang' } }),
+  ).rejects.toEqual(new WishRejectedError('alreadyRequested'));
   expect(await system.list()).toHaveLength(1);
 });
 

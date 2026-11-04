@@ -1,6 +1,6 @@
 import type { DemoFlags } from '@/demo/demo-settings';
 import { StationUnavailableError } from '@/domain/errors';
-import type { Wish, WishId, WishInput, WishStatus } from '@/domain/wish';
+import type { Wish, WishedSong, WishId, WishInput, WishStatus } from '@/domain/wish';
 import { wishQuota, type WishQuota } from '@/domain/wish-quota';
 import { validateWish, WishRejectedError } from '@/domain/wish-validation';
 import type { WishSystem } from '@/ports/wish-system';
@@ -20,13 +20,22 @@ const normalFlags: Flags = { connection: 'online', sendFails: false, quotaExhaus
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function sameSong(a: WishedSong, b: WishedSong): boolean {
+  if (a.kind === 'catalog' || b.kind === 'catalog') {
+    return a.kind === 'catalog' && b.kind === 'catalog' && a.trackId === b.trackId;
+  }
+  return a.description.toLocaleLowerCase('de') === b.description.toLocaleLowerCase('de');
+}
+
 /**
- * Runs on the device, so it only ever sees this device's requests and can count the quota
- * without a device id. A real request system would need one.
+ * Runs on the device, so it only ever sees this device's requests and can count the quota and
+ * its own votes without a device id. A real request system would need one.
  */
 export class StubWishSystem implements WishSystem {
   private wishes: Wish[];
   private readonly sentAt: Date[] = [];
+  /** Wishes this device has already requested or voted for. */
+  private readonly supported = new Set<WishId>();
   private created: number;
   private readonly now: () => Date;
   private readonly delayMs: number;
@@ -52,11 +61,17 @@ export class StubWishSystem implements WishSystem {
     const result = validateWish(input);
     if (!result.ok) throw new WishRejectedError(result.problems[0]);
 
+    const { song, greeting } = result.input;
+    const own = this.wishes.find(
+      (w) => w.status === 'open' && this.supported.has(w.id) && sameSong(w.song, song),
+    );
+    // One vote per device and song, otherwise one listener could push a song with the quota.
+    if (own) throw new WishRejectedError('alreadyRequested');
+
     const now = this.now();
     if (this.currentQuota(now).exhausted) throw new WishRejectedError('quotaExhausted');
     this.sentAt.push(now);
 
-    const { song, greeting } = result.input;
     const trackId = song.kind === 'catalog' ? song.trackId : undefined;
     const open = this.wishes.find(
       (w) => w.status === 'open' && w.song.kind === 'catalog' && w.song.trackId === trackId,
@@ -64,6 +79,7 @@ export class StubWishSystem implements WishSystem {
 
     // An open wish for the same track gets a vote instead, so the studio sees no duplicates.
     if (open) {
+      this.supported.add(open.id);
       return this.replace({ ...open, votes: open.votes + 1, greeting: open.greeting ?? greeting });
     }
 
@@ -76,6 +92,7 @@ export class StubWishSystem implements WishSystem {
       status: 'open',
     };
     this.wishes = [wish, ...this.wishes];
+    this.supported.add(wish.id);
     return { ...wish };
   }
 
