@@ -1,15 +1,27 @@
-import { act, fireEvent, screen, userEvent } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen, userEvent } from '@testing-library/react-native';
 
 import RateTrackScreen from '@/app/rate/track';
+import { DemoClock } from '@/demo/demo-clock';
 import { AlreadyRatedError } from '@/domain/errors';
 import type { NowPlaying } from '@/domain/now-playing';
 import type { Rating, RatingId, RatingInput } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
 import { schedule } from '@/seed/schedule';
 import { createStubStations } from '@/stations/stations';
+import { RatingProvider } from '@/stations/rating-provider';
 import { StationsProvider } from '@/stations/stations-provider';
+import { ThemeProvider } from '@/theme';
 
 import { renderWithTheme } from './render';
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
+beforeEach(async () => {
+  await AsyncStorage.clear();
+});
 
 const startedAt = new Date(2026, 9, 26, 18, 40);
 const playing: NowPlaying = {
@@ -28,7 +40,9 @@ async function renderTrack(result: () => Promise<NowPlaying>) {
   stations.feedbackHub.submitRating = jest.fn(async (input) => savedRating(input));
   await renderWithTheme(
     <StationsProvider stations={stations}>
-      <RateTrackScreen />
+      <RatingProvider clock={new DemoClock(startedAt)} feedbackHub={stations.feedbackHub}>
+        <RateTrackScreen />
+      </RatingProvider>
     </StationsProvider>,
   );
   return stations;
@@ -177,4 +191,44 @@ test('shows the saved rating returned by the hub in the confirmation', async () 
   expect(screen.getByText('18:43')).toBeOnTheScreen();
   expect(screen.queryByRole('radiogroup')).not.toBeOnTheScreen();
   expect(screen.queryByText('4/5')).not.toBeOnTheScreen();
+});
+
+test('blocks a second rating when the screen is opened again', async () => {
+  const stations = createStubStations();
+  stations.playout.getNowPlaying = jest.fn(async () => playing);
+  stations.feedbackHub.submitRating = jest.fn(async (input) => savedRating(input));
+  const clock = new DemoClock(startedAt);
+  const view = (key: string) => (
+    <ThemeProvider initialPreference="dark">
+      <StationsProvider stations={stations}>
+        <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
+          <RateTrackScreen key={key} />
+        </RatingProvider>
+      </StationsProvider>
+    </ThemeProvider>
+  );
+  const screenView = await render(view('first'));
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  await screen.findByText('Danke, ist angekommen');
+
+  await screenView.rerender(view('second'));
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  expect(await screen.findByText('Schon bewertet')).toBeOnTheScreen();
+  expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(1);
+});
+
+test('retries local saving without sending the rating again', async () => {
+  const stations = await renderTrack(() => Promise.resolve(playing));
+  jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('storage'));
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  expect(await screen.findByText('Bewertung gesendet')).toBeOnTheScreen();
+  await userEvent.press(screen.getByRole('button', { name: 'Speichern erneut versuchen' }));
+  expect(await screen.findByRole('button', { name: 'Fertig' })).toBeOnTheScreen();
+  expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(1);
 });
