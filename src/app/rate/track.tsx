@@ -11,19 +11,22 @@ import { AlreadyRatedError } from '@/domain/errors';
 import type { Rating, Score } from '@/domain/rating';
 import type { PlayedTrack } from '@/domain/track';
 import { useStations } from '@/stations/stations-provider';
+import { useRatingSubmission } from '@/stations/rating-provider';
 import { radius, screenPadding, spacing, touchTarget, useTheme } from '@/theme';
 
 const maxCommentLength = 240;
 
 export default function RateTrackScreen() {
   const colors = useTheme();
-  const { playout, feedbackHub } = useStations();
+  const { playout } = useStations();
+  const ratingSubmission = useRatingSubmission();
   const [playing, setPlaying] = useState<PlayedTrack | 'loading' | 'error'>('loading');
   const [score, setScore] = useState<Score>();
   const [comment, setComment] = useState('');
   const [submission, setSubmission] = useState<
-    'idle' | 'sending' | 'error' | 'alreadyRated' | Rating
+    'idle' | 'sending' | 'error' | 'alreadyRated' | 'storage' | 'demoChanged' | Rating
   >('idle');
+  const [saveFailed, setSaveFailed] = useState(false);
   const submitLocked = useRef(false);
   const receipt = typeof submission === 'object' ? submission : undefined;
   const locked = submission === 'sending' || receipt !== undefined || submission === 'alreadyRated';
@@ -60,12 +63,24 @@ export default function RateTrackScreen() {
     submitLocked.current = true;
     setSubmission('sending');
     try {
-      const saved = await feedbackHub.submitRating({
+      const result = await ratingSubmission.submit(
+        { kind: 'track', trackId: playing.track.id },
         score,
-        subject: { kind: 'track', trackId: playing.track.id },
-        comment: comment || undefined,
-      });
-      setSubmission(saved);
+        comment || undefined,
+      );
+      if (result.status === 'sent') {
+        setSaveFailed(!result.remembered);
+        setSubmission(result.rating);
+      } else if (result.status === 'alreadyRated') {
+        setSubmission('alreadyRated');
+      } else if (result.status === 'awaitingLocalSave') {
+        setSubmission('storage');
+      } else if (result.status === 'demoChanged') {
+        setSubmission('demoChanged');
+      } else {
+        submitLocked.current = false;
+        setSubmission('error');
+      }
     } catch (error) {
       if (error instanceof AlreadyRatedError) {
         setSubmission('alreadyRated');
@@ -73,6 +88,16 @@ export default function RateTrackScreen() {
       }
       submitLocked.current = false;
       setSubmission('error');
+    }
+  }
+
+  async function retrySave() {
+    if (await ratingSubmission.retryLocalSave()) {
+      setSaveFailed(false);
+      if (submission === 'storage') {
+        submitLocked.current = false;
+        setSubmission('idle');
+      }
     }
   }
 
@@ -111,7 +136,23 @@ export default function RateTrackScreen() {
             </AppText>
           </Card>
           <View style={styles.receipt}>
-            <AppButton label="Fertig" onPress={router.back} />
+            {saveFailed ? (
+              <>
+                <StatusBanner
+                  tone="error"
+                  title="Bewertung gesendet"
+                  text="Die lokale Speicherung hat nicht geklappt."
+                />
+                <AppButton
+                  label="Speichern erneut versuchen"
+                  onPress={() => {
+                    void retrySave();
+                  }}
+                />
+              </>
+            ) : (
+              <AppButton label="Fertig" onPress={router.back} />
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -157,7 +198,19 @@ export default function RateTrackScreen() {
             </View>
           </Card>
         )}
-        {submission === 'alreadyRated' ? (
+        {submission === 'storage' ? (
+          <StatusBanner
+            tone="error"
+            title="Speicherung ausstehend"
+            text="Eine gesendete Bewertung muss noch gespeichert werden."
+          />
+        ) : submission === 'demoChanged' ? (
+          <StatusBanner
+            tone="info"
+            title="Demo-Zeit geändert"
+            text="Bitte öffne die Bewertung erneut."
+          />
+        ) : submission === 'alreadyRated' ? (
           <StatusBanner
             tone="info"
             title="Schon bewertet"
@@ -181,7 +234,14 @@ export default function RateTrackScreen() {
         )}
       </ScrollView>
       <View style={styles.footer}>
-        {submission === 'alreadyRated' ? (
+        {submission === 'storage' ? (
+          <AppButton
+            label="Speichern erneut versuchen"
+            onPress={() => {
+              void retrySave();
+            }}
+          />
+        ) : submission === 'alreadyRated' || submission === 'demoChanged' ? (
           <AppButton label="Zurück" variant="secondary" onPress={router.back} />
         ) : (
           <AppButton
