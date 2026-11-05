@@ -1,4 +1,5 @@
-import { act, fireEvent, screen, userEvent } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen, userEvent } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
 import RateShowScreen from '@/app/rate/show';
@@ -10,9 +11,19 @@ import type { Rating, RatingInput } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
 import { schedule } from '@/seed/schedule';
 import { createStubStations } from '@/stations/stations';
+import { RatingProvider } from '@/stations/rating-provider';
 import { StationsProvider } from '@/stations/stations-provider';
+import { ThemeProvider } from '@/theme';
 
 import { renderWithTheme } from './render';
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
+beforeEach(async () => {
+  await AsyncStorage.clear();
+});
 
 const startedAt = new Date(2026, 9, 27, 18, 40);
 const playing: NowPlaying = {
@@ -29,10 +40,13 @@ async function renderShow(
   const stations = createStubStations();
   stations.playout.getNowPlaying = jest.fn(result);
   if (submit) stations.feedbackHub.submitRating = submit;
+  const clock = new DemoClock(startedAt);
   await renderWithTheme(
-    <DemoProvider clock={new DemoClock(startedAt)} settings={settings}>
+    <DemoProvider clock={clock} settings={settings}>
       <StationsProvider stations={stations}>
-        <RateShowScreen />
+        <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
+          <RateShowScreen />
+        </RatingProvider>
       </StationsProvider>
     </DemoProvider>,
   );
@@ -43,6 +57,62 @@ test('shows a loading state while the current show is pending', async () => {
   await renderShow(() => new Promise(() => {}));
 
   expect(screen.getByRole('progressbar', { name: 'Sendung wird geladen' })).toBeOnTheScreen();
+});
+
+test('blocks a second rating for the same show', async () => {
+  const stations = createStubStations();
+  stations.playout.getNowPlaying = jest.fn(async () => playing);
+  stations.feedbackHub.submitRating = jest.fn(async (input) => ({
+    ...input,
+    id: 'rating-1' as Rating['id'],
+    createdAt: startedAt,
+  }));
+  const clock = new DemoClock(startedAt);
+  const settings = new DemoSettings();
+  const view = (key: string) => (
+    <ThemeProvider initialPreference="dark">
+      <DemoProvider clock={clock} settings={settings}>
+        <StationsProvider stations={stations}>
+          <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
+            <RateShowScreen key={key} />
+          </RatingProvider>
+        </StationsProvider>
+      </DemoProvider>
+    </ThemeProvider>
+  );
+  const screenView = await render(view('first'));
+  await screen.findByText('Lena Osterkamp');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  await screen.findByText('Danke, ist angekommen');
+  await screenView.rerender(view('second'));
+  await screen.findByText('Lena Osterkamp');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  expect(await screen.findByText('Schon bewertet')).toBeOnTheScreen();
+  expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(1);
+});
+
+test('closes the rating window when the show ends', async () => {
+  const stations = createStubStations();
+  stations.playout.getNowPlaying = jest.fn(async () => playing);
+  stations.feedbackHub.submitRating = jest.fn();
+  const clock = new DemoClock(startedAt, () => 0);
+  await renderWithTheme(
+    <DemoProvider clock={clock} settings={new DemoSettings()}>
+      <StationsProvider stations={stations}>
+        <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
+          <RateShowScreen />
+        </RatingProvider>
+      </StationsProvider>
+    </DemoProvider>,
+  );
+  await screen.findByText('Lena Osterkamp');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await act(() => clock.jumpTo(playing.show.endsAt));
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  expect(await screen.findByText('Bewertungsfenster geschlossen')).toBeOnTheScreen();
+  expect(stations.feedbackHub.submitRating).not.toHaveBeenCalled();
 });
 
 test('sends a show rating, preserves it after an error and shows the returned confirmation', async () => {
