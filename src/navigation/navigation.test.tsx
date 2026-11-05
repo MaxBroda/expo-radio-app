@@ -2,11 +2,11 @@ import { act, screen, userEvent } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { renderRouter } from 'expo-router/testing-library';
 
+const appDir = './src/app';
+
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
-
-const appDir = './src/app';
 
 function renderApp() {
   return renderRouter(appDir, { initialUrl: '/' });
