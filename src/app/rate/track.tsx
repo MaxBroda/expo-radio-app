@@ -8,13 +8,15 @@ import { ModalHeader } from '@/components/modal-header';
 import { RatingStars } from '@/components/rating-stars';
 import { AppButton, AppText, Card, Pill, StatusBanner, TextField } from '@/components/ui';
 import { AlreadyRatedError } from '@/domain/errors';
-import type { Rating, Score } from '@/domain/rating';
+import {
+  ratingCommentMaxLength as maxCommentLength,
+  type Rating,
+  type Score,
+} from '@/domain/rating';
 import type { PlayedTrack } from '@/domain/track';
 import { useStations } from '@/stations/stations-provider';
 import { useRatingSubmission } from '@/stations/rating-provider';
 import { radius, screenPadding, spacing, touchTarget, useTheme } from '@/theme';
-
-const maxCommentLength = 240;
 
 export default function RateTrackScreen() {
   const colors = useTheme();
