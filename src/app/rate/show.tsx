@@ -8,25 +8,42 @@ import { ModalHeader } from '@/components/modal-header';
 import { RatingStars } from '@/components/rating-stars';
 import { AppButton, AppText, Card, Pill, StatusBanner, TextField } from '@/components/ui';
 import { useDemoFlags } from '@/demo/demo-provider';
-import type { Rating, Score } from '@/domain/rating';
+import {
+  ratingCommentMaxLength as maxCommentLength,
+  type Rating,
+  type Score,
+} from '@/domain/rating';
 import type { Show } from '@/domain/show';
 import { useStations } from '@/stations/stations-provider';
+import { useRatingSubmission } from '@/stations/rating-provider';
 import { radius, screenPadding, spacing, touchTarget, useTheme } from '@/theme';
 
-const maxCommentLength = 240;
-
 export default function RateShowScreen() {
-  const { playout, feedbackHub } = useStations();
+  const { playout } = useStations();
+  const ratingSubmission = useRatingSubmission();
   const { ratingWindowClosed } = useDemoFlags();
   const colors = useTheme();
   const [show, setShow] = useState<Show | 'loading' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [comment, setComment] = useState('');
   const [score, setScore] = useState<Score>();
-  const [submission, setSubmission] = useState<'idle' | 'sending' | 'error' | Rating>('idle');
+  const [submission, setSubmission] = useState<
+    | 'idle'
+    | 'sending'
+    | 'error'
+    | 'alreadyRated'
+    | 'windowClosed'
+    | 'storage'
+    | 'demoChanged'
+    | Rating
+  >('idle');
+  const [saveFailed, setSaveFailed] = useState(false);
   const submitLocked = useRef(false);
   const receipt = typeof submission === 'object' ? submission : undefined;
-  const closed = typeof show !== 'string' && !!show.hostName && ratingWindowClosed;
+  const closed =
+    typeof show !== 'string' &&
+    !!show.hostName &&
+    (ratingWindowClosed || submission === 'windowClosed');
 
   useEffect(() => {
     let active = true;
@@ -56,15 +73,39 @@ export default function RateShowScreen() {
     submitLocked.current = true;
     setSubmission('sending');
     try {
-      const result = await feedbackHub.submitRating({
+      const result = await ratingSubmission.submit(
+        { kind: 'show', show },
         score,
-        subject: { kind: 'show', showId: show.id },
-        comment: comment || undefined,
-      });
-      setSubmission(result);
+        comment || undefined,
+      );
+      if (result.status === 'sent') {
+        setSaveFailed(!result.remembered);
+        setSubmission(result.rating);
+      } else if (
+        result.status === 'alreadyRated' ||
+        result.status === 'windowClosed' ||
+        result.status === 'demoChanged'
+      ) {
+        setSubmission(result.status);
+      } else if (result.status === 'awaitingLocalSave') {
+        setSubmission('storage');
+      } else {
+        submitLocked.current = false;
+        setSubmission('error');
+      }
     } catch {
       submitLocked.current = false;
       setSubmission('error');
+    }
+  }
+
+  async function retrySave() {
+    if (await ratingSubmission.retryLocalSave()) {
+      setSaveFailed(false);
+      if (submission === 'storage') {
+        submitLocked.current = false;
+        setSubmission('idle');
+      }
     }
   }
 
@@ -103,7 +144,23 @@ export default function RateShowScreen() {
             </AppText>
           </Card>
           <View style={styles.receipt}>
-            <AppButton label="Fertig" onPress={router.back} />
+            {saveFailed ? (
+              <>
+                <StatusBanner
+                  tone="error"
+                  title="Bewertung gesendet"
+                  text="Die lokale Speicherung hat nicht geklappt."
+                />
+                <AppButton
+                  label="Speichern erneut versuchen"
+                  onPress={() => {
+                    void retrySave();
+                  }}
+                />
+              </>
+            ) : (
+              <AppButton label="Fertig" onPress={router.back} />
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -170,7 +227,25 @@ export default function RateShowScreen() {
             </View>
           </Card>
         )}
-        {closed ? (
+        {submission === 'storage' ? (
+          <StatusBanner
+            tone="error"
+            title="Speicherung ausstehend"
+            text="Eine gesendete Bewertung muss noch gespeichert werden."
+          />
+        ) : submission === 'demoChanged' ? (
+          <StatusBanner
+            tone="info"
+            title="Demo-Zeit geändert"
+            text="Bitte öffne die Bewertung erneut."
+          />
+        ) : submission === 'alreadyRated' ? (
+          <StatusBanner
+            tone="info"
+            title="Schon bewertet"
+            text="Du hast diese Sendung bereits bewertet."
+          />
+        ) : closed ? (
           <StatusBanner
             tone="info"
             title="Bewertungsfenster geschlossen"
@@ -192,30 +267,45 @@ export default function RateShowScreen() {
           </>
         ) : null}
       </ScrollView>
-      {closed && (
+      {submission === 'storage' && (
+        <View style={styles.footer}>
+          <AppButton
+            label="Speichern erneut versuchen"
+            onPress={() => {
+              void retrySave();
+            }}
+          />
+        </View>
+      )}
+      {(closed || submission === 'alreadyRated' || submission === 'demoChanged') && (
         <View style={styles.footer}>
           <AppButton label="Zurück" variant="secondary" onPress={router.back} />
         </View>
       )}
-      {!closed && typeof show !== 'string' && !!show.hostName && (
-        <View style={styles.footer}>
-          <AppButton
-            label={
-              submission === 'sending'
-                ? 'Wird gesendet …'
-                : submission === 'error'
-                  ? 'Erneut senden'
-                  : 'Bewertung absenden'
-            }
-            onPress={() => {
-              void submit();
-            }}
-            disabled={
-              score === undefined || comment.length > maxCommentLength || submission === 'sending'
-            }
-          />
-        </View>
-      )}
+      {!closed &&
+        submission !== 'storage' &&
+        submission !== 'alreadyRated' &&
+        submission !== 'demoChanged' &&
+        typeof show !== 'string' &&
+        !!show.hostName && (
+          <View style={styles.footer}>
+            <AppButton
+              label={
+                submission === 'sending'
+                  ? 'Wird gesendet …'
+                  : submission === 'error'
+                    ? 'Erneut senden'
+                    : 'Bewertung absenden'
+              }
+              onPress={() => {
+                void submit();
+              }}
+              disabled={
+                score === undefined || comment.length > maxCommentLength || submission === 'sending'
+              }
+            />
+          </View>
+        )}
     </SafeAreaView>
   );
 }
