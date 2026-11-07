@@ -43,7 +43,7 @@ test('opens rating as modal from now playing', async () => {
   const user = setupUser();
   const app = await renderApp();
 
-  await user.press(screen.getByText('Playlist bewerten'));
+  await user.press(await screen.findByText('Titel bewerten'));
 
   expect(app.getPathname()).toBe('/rate/track');
 });
@@ -61,7 +61,7 @@ test('finishing a submitted track rating returns to now playing', async () => {
   try {
     const user = setupUser();
     const app = await renderApp();
-    await user.press(screen.getByText('Playlist bewerten'));
+    await user.press(await screen.findByText('Titel bewerten'));
     await screen.findByText(catalog[0].title);
     await user.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
     await user.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
@@ -116,7 +116,7 @@ test('back in a rating modal returns to now playing', async () => {
   const user = setupUser();
   const app = await renderApp();
 
-  await user.press(screen.getByText('Moderation bewerten'));
+  await user.press(await screen.findByRole('button', { name: /^Moderation von .* bewerten$/ }));
   expect(app.getPathname()).toBe('/rate/show');
 
   await user.press(screen.getByLabelText('Zurück'));
@@ -153,7 +153,7 @@ test('listener routes are closed to moderation', async () => {
   await act(() => router.push('/rate/track'));
 
   expect(app.getPathname()).not.toBe('/rate/track');
-  expect(screen.queryByText('Playlist bewerten')).toBeNull();
+  expect(screen.queryByText('Titel bewerten')).toBeNull();
 });
 
 test('demo states switch on, stay exclusive per connection and reset', async () => {
