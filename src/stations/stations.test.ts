@@ -22,6 +22,7 @@ test('stubs follow the demo clock and the demo states', async () => {
     exhausted: true,
     resetsAt: new Date(2026, 9, 15, 19, 0),
   });
+  expect((await stations.playout.getNowPlaying()).show.title).toBe('Feierabendwelle');
 });
 
 test('the feedback hub uses the supplied demo clock', async () => {
