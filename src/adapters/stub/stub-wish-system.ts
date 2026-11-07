@@ -7,6 +7,8 @@ import type { WishSystem } from '@/ports/wish-system';
 import { catalog } from '@/seed/catalog';
 import { seedWishes } from '@/seed/wishes';
 
+import { reachStation } from './reach-station';
+
 type Flags = Pick<DemoFlags, 'connection' | 'sendFails' | 'quotaExhausted'>;
 
 type Options = {
@@ -17,8 +19,6 @@ type Options = {
 };
 
 const normalFlags: Flags = { connection: 'online', sendFails: false, quotaExhausted: false };
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function sameSong(a: WishedSong, b: WishedSong): boolean {
   if (a.kind === 'catalog' || b.kind === 'catalog') {
@@ -127,8 +127,7 @@ export class StubWishSystem implements WishSystem {
     return { ...wish };
   }
 
-  private async reach() {
-    if (this.delayMs > 0) await wait(this.delayMs);
-    if (this.flags().connection === 'offline') throw new StationUnavailableError('WishSystem');
+  private reach() {
+    return reachStation('WishSystem', this.delayMs, () => this.flags().connection);
   }
 }

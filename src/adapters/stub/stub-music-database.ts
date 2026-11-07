@@ -1,8 +1,9 @@
 import type { Connection } from '@/demo/demo-settings';
-import { StationUnavailableError } from '@/domain/errors';
 import type { Track, TrackId } from '@/domain/track';
 import type { MusicDatabase } from '@/ports/music-database';
 import { catalog as seedCatalog, type CatalogTrack } from '@/seed/catalog';
+
+import { reachStation } from './reach-station';
 
 export const searchLimits = { minQueryLength: 2, maxResults: 10 } as const;
 
@@ -11,8 +12,6 @@ type Options = {
   delayMs?: number;
   connection?: () => Connection;
 };
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Lowercase without accents, so "beyonce" finds "Beyoncé" and "strasse" finds "Straße". */
 function fold(text: string): string {
@@ -69,8 +68,7 @@ export class StubMusicDatabase implements MusicDatabase {
     return entry && toTrack(entry.track);
   }
 
-  private async reach() {
-    if (this.delayMs > 0) await wait(this.delayMs);
-    if (this.connection() === 'offline') throw new StationUnavailableError('MusicDatabase');
+  private reach() {
+    return reachStation('MusicDatabase', this.delayMs, this.connection);
   }
 }
