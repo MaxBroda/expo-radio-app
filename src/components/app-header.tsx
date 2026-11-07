@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { spacing } from '@/theme';
@@ -5,7 +6,7 @@ import { spacing } from '@/theme';
 import { DemoBadge } from './demo-badge';
 import { AppText } from './ui';
 
-export function AppHeader({ area }: { area: 'listener' | 'studio' }) {
+export function AppHeader({ area, status }: { area: 'listener' | 'studio'; status?: ReactNode }) {
   return (
     <View style={styles.header}>
       <View style={styles.brand}>
@@ -19,7 +20,7 @@ export function AppHeader({ area }: { area: 'listener' | 'studio' }) {
         )}
         {area === 'listener' && <DemoBadge />}
       </View>
-      {area === 'studio' && <DemoBadge />}
+      {area === 'studio' ? <DemoBadge /> : status}
     </View>
   );
 }
