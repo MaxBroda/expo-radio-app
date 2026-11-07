@@ -9,3 +9,4 @@ next number, and open it with the pull request that implements the decision.
 | [0002](0002-demo-role-switch.md)     | Demo role switch instead of login         |
 | [0003](0003-musicbrainz-metadata.md) | Real track metadata from MusicBrainz      |
 | [0004](0004-demo-clock-and-seed.md)  | Demo clock and generated seed             |
+| [0005](0005-stubs-over-backend.md)   | Stubs instead of a backend                |
