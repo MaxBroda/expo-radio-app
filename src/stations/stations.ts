@@ -29,7 +29,7 @@ export function createStubStations(
   clock = new DemoClock(demoMoment(schedule.slot('feierabend'))),
 ): Stations {
   return {
-    playout: new StubPlayout(),
+    playout: new StubPlayout({ now: context.now, flags: context.flags }),
     musicDatabase: new StubMusicDatabase({ connection: () => context.flags().connection }),
     feedbackHub: new StubFeedbackHub(clock, { get: context.flags }),
     wishSystem: new StubWishSystem({ now: context.now, flags: context.flags }),
