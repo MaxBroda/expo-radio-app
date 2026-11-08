@@ -56,7 +56,7 @@ export default function ComponentShowcase() {
         <Section title="Typografie">
           <AppText variant="display">Nordlicht</AppText>
           <AppText variant="title">Song wünschen</AppText>
-          <AppText variant="headline">Playlist bewerten</AppText>
+          <AppText variant="headline">Titel bewerten</AppText>
           <AppText tone="secondary">Halbmond Kollektiv</AppText>
           <AppText variant="label" tone="muted">
             Lena Osterkamp · bis 20:00
@@ -67,7 +67,7 @@ export default function ComponentShowcase() {
         </Section>
 
         <Section title="Buttons">
-          <AppButton label="Playlist bewerten" onPress={() => {}} />
+          <AppButton label="Titel bewerten" onPress={() => {}} />
           <AppButton label="Song wünschen" variant="secondary" onPress={() => {}} />
           <AppButton label="Wunsch absenden" disabled onPress={() => {}} />
           <View style={styles.row}>

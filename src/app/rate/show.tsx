@@ -27,6 +27,7 @@ export default function RateShowScreen() {
   const [attempt, setAttempt] = useState(0);
   const [comment, setComment] = useState('');
   const [score, setScore] = useState<Score>();
+  const [ratedScore, setRatedScore] = useState<Score>();
   const [submission, setSubmission] = useState<
     | 'idle'
     | 'sending'
@@ -47,18 +48,26 @@ export default function RateShowScreen() {
 
   useEffect(() => {
     let active = true;
-    playout.getNowPlaying().then(
-      (current) => {
-        if (active) setShow(current.show);
-      },
-      () => {
+    playout
+      .getNowPlaying()
+      .then(async ({ show: current }) => {
+        const rated = await ratingSubmission
+          .ratedScore({ kind: 'show', showId: current.id })
+          .catch(() => undefined);
+        if (!active) return;
+        setShow(current);
+        if (rated !== undefined) {
+          setRatedScore(rated);
+          setSubmission('alreadyRated');
+        }
+      })
+      .catch(() => {
         if (active) setShow('error');
-      },
-    );
+      });
     return () => {
       active = false;
     };
-  }, [playout, attempt]);
+  }, [playout, ratingSubmission, attempt]);
 
   async function submit() {
     if (
@@ -81,11 +90,14 @@ export default function RateShowScreen() {
       if (result.status === 'sent') {
         setSaveFailed(!result.remembered);
         setSubmission(result.rating);
-      } else if (
-        result.status === 'alreadyRated' ||
-        result.status === 'windowClosed' ||
-        result.status === 'demoChanged'
-      ) {
+      } else if (result.status === 'alreadyRated') {
+        setRatedScore(
+          await ratingSubmission
+            .ratedScore({ kind: 'show', showId: show.id })
+            .catch(() => undefined),
+        );
+        setSubmission('alreadyRated');
+      } else if (result.status === 'windowClosed' || result.status === 'demoChanged') {
         setSubmission(result.status);
       } else if (result.status === 'awaitingLocalSave') {
         setSubmission('storage');
@@ -243,7 +255,9 @@ export default function RateShowScreen() {
           <StatusBanner
             tone="info"
             title="Schon bewertet"
-            text="Du hast diese Sendung bereits bewertet."
+            text={`Du hast diese Sendung bereits bewertet.${
+              ratedScore ? ` Deine Wertung: ${ratedScore} von 5.` : ''
+            }`}
           />
         ) : closed ? (
           <StatusBanner

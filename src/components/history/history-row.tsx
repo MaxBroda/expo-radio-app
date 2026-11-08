@@ -1,18 +1,26 @@
+import { Star } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
-import { AppText, Skeleton } from '@/components/ui';
+import { AppText, Skeleton, Tappable } from '@/components/ui';
 import { CoverPlaceholder } from '@/components/wish/cover-placeholder';
 import { clockTime } from '@/components/wish/wish-format';
+import type { Score } from '@/domain/rating';
 import type { PlayedTrack } from '@/domain/track';
-import { radius, spacing } from '@/theme';
+import { radius, spacing, useTheme } from '@/theme';
 
 const coverSize = 48;
 
-export function HistoryRow({ played: { track, startedAt } }: { played: PlayedTrack }) {
+type Props = { played: PlayedTrack; score?: Score; onPress: () => void };
+
+export function HistoryRow({ played: { track, startedAt }, score, onPress }: Props) {
+  const rated = score ? `, bewertet mit ${score} von 5` : '';
   return (
-    <View
-      accessible
-      accessibilityLabel={`${track.title} von ${track.artist}, ${clockTime(startedAt)} Uhr`}
+    <Tappable
+      feedback="listRow"
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${track.title} von ${track.artist}, ${clockTime(startedAt)} Uhr${rated}`}
+      accessibilityHint="Öffnet die Bewertung für diesen Titel"
       style={styles.row}
     >
       <CoverPlaceholder seed={track.id} size={coverSize} />
@@ -24,8 +32,23 @@ export function HistoryRow({ played: { track, startedAt } }: { played: PlayedTra
           {track.artist}
         </AppText>
       </View>
+      {score && <ScoreBadge score={score} />}
       <AppText variant="mono" tone="muted">
         {clockTime(startedAt)}
+      </AppText>
+    </Tappable>
+  );
+}
+
+function ScoreBadge({ score }: { score: Score }) {
+  const colors = useTheme();
+  const tone = score <= 2 ? 'critical' : 'data';
+  const { surface, border, base } = colors[tone];
+  return (
+    <View style={[styles.badge, { backgroundColor: surface, borderColor: border }]}>
+      <Star size={12} color={base} fill={base} />
+      <AppText variant="mono" tone={tone}>
+        {score}/5
       </AppText>
     </View>
   );
@@ -50,4 +73,13 @@ export function HistoryRowSkeleton({ index }: { index: number }) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 64 },
   titles: { flex: 1, gap: 2 },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    height: 26,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+  },
 });

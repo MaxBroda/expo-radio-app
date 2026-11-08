@@ -1,12 +1,14 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Check } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { historyLength } from '@/components/history/use-history';
 import { ModalHeader } from '@/components/modal-header';
 import { RatingStars } from '@/components/rating-stars';
 import { AppButton, AppText, Card, Pill, StatusBanner, TextField } from '@/components/ui';
+import { CoverPlaceholder } from '@/components/wish/cover-placeholder';
 import { AlreadyRatedError } from '@/domain/errors';
 import {
   ratingCommentMaxLength as maxCommentLength,
@@ -14,15 +16,37 @@ import {
   type Score,
 } from '@/domain/rating';
 import type { PlayedTrack } from '@/domain/track';
+import type { Playout } from '@/ports/playout';
 import { useStations } from '@/stations/stations-provider';
 import { useRatingSubmission } from '@/stations/rating-provider';
 import { radius, screenPadding, spacing, touchTarget, useTheme } from '@/theme';
+
+type Target = PlayedTrack & { onAir: boolean };
+
+/** Without params the current track; from the history the track that started at `startedAt`. */
+async function findTarget(
+  playout: Playout,
+  trackId?: string,
+  startedAt?: string,
+): Promise<Target | undefined> {
+  const matches = (played: PlayedTrack) =>
+    played.track.id === trackId && played.startedAt.getTime() === Number(startedAt);
+  const current = await playout.getNowPlaying();
+  if (!trackId || matches(current)) return { ...current, onAir: true };
+  const played = (await playout.getHistory(historyLength)).find(matches);
+  return played && { ...played, onAir: false };
+}
+
+const coverSize = touchTarget + spacing.md;
 
 export default function RateTrackScreen() {
   const colors = useTheme();
   const { playout } = useStations();
   const ratingSubmission = useRatingSubmission();
-  const [playing, setPlaying] = useState<PlayedTrack | 'loading' | 'error'>('loading');
+  const { trackId, startedAt } = useLocalSearchParams<{ trackId?: string; startedAt?: string }>();
+  const [playing, setPlaying] = useState<Target | 'loading' | 'error'>('loading');
+  const [attempt, setAttempt] = useState(0);
+  const [ratedScore, setRatedScore] = useState<Score>();
   const [score, setScore] = useState<Score>();
   const [comment, setComment] = useState('');
   const [submission, setSubmission] = useState<
@@ -40,18 +64,35 @@ export default function RateTrackScreen() {
 
   useEffect(() => {
     let active = true;
-    playout.getNowPlaying().then(
-      (current) => {
-        if (active) setPlaying(current);
-      },
-      () => {
+    findTarget(playout, trackId, startedAt)
+      .then(async (target) => {
+        if (!target) throw new Error('track no longer in history');
+        const score = await ratingSubmission
+          .ratedScore({ kind: 'track', trackId: target.track.id })
+          .catch(() => undefined);
+        if (!active) return;
+        setPlaying(target);
+        if (score !== undefined) {
+          setRatedScore(score);
+          setSubmission('alreadyRated');
+        }
+      })
+      .catch(() => {
         if (active) setPlaying('error');
-      },
-    );
+      });
     return () => {
       active = false;
     };
-  }, [playout]);
+  }, [playout, ratingSubmission, trackId, startedAt, attempt]);
+
+  async function showAlreadyRated(subject: Target) {
+    setRatedScore(
+      await ratingSubmission
+        .ratedScore({ kind: 'track', trackId: subject.track.id })
+        .catch(() => undefined),
+    );
+    setSubmission('alreadyRated');
+  }
 
   async function submit() {
     if (
@@ -74,7 +115,7 @@ export default function RateTrackScreen() {
         setSaveFailed(!result.remembered);
         setSubmission(result.rating);
       } else if (result.status === 'alreadyRated') {
-        setSubmission('alreadyRated');
+        await showAlreadyRated(playing);
       } else if (result.status === 'awaitingLocalSave') {
         setSubmission('storage');
       } else if (result.status === 'demoChanged') {
@@ -85,7 +126,7 @@ export default function RateTrackScreen() {
       }
     } catch (error) {
       if (error instanceof AlreadyRatedError) {
-        setSubmission('alreadyRated');
+        await showAlreadyRated(playing);
         return;
       }
       submitLocked.current = false;
@@ -163,7 +204,7 @@ export default function RateTrackScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ModalHeader title="Playlist bewerten" />
+      <ModalHeader title="Titel bewerten" />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {submission === 'error' && (
           <StatusBanner
@@ -177,21 +218,25 @@ export default function RateTrackScreen() {
             <AppText tone="muted">Titel wird geladen …</AppText>
           </Card>
         ) : playing === 'error' ? (
-          <StatusBanner tone="error" title="Titel gerade nicht verfügbar" />
+          <>
+            <StatusBanner tone="error" title="Titel gerade nicht verfügbar" />
+            <AppButton
+              label="Erneut versuchen"
+              variant="secondary"
+              onPress={() => {
+                setPlaying('loading');
+                setAttempt((previous) => previous + 1);
+              }}
+            />
+          </>
         ) : (
           <Card style={styles.trackCard}>
-            <View
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              style={[styles.cover, { backgroundColor: colors.surface.raised }]}
-            >
-              <View style={[styles.coverCircle, { backgroundColor: colors.accent.base }]} />
-            </View>
+            <CoverPlaceholder seed={playing.track.id} size={coverSize} />
             <View style={styles.trackDetails}>
               <AppText variant="headline">{playing.track.title}</AppText>
               <AppText tone="secondary">{playing.track.artist}</AppText>
               <AppText variant="mono" tone="muted">
-                läuft seit{' '}
+                {playing.onAir ? 'läuft seit' : 'gelaufen'}{' '}
                 {playing.startedAt.toLocaleTimeString('de-DE', {
                   hour: '2-digit',
                   minute: '2-digit',
@@ -216,7 +261,9 @@ export default function RateTrackScreen() {
           <StatusBanner
             tone="info"
             title="Schon bewertet"
-            text="Du hast diesen Titel bereits bewertet. Pro Titel zählt eine Stimme."
+            text={`Pro Titel zählt eine Stimme, so bleibt das Stimmungsbild im Studio ehrlich.${
+              ratedScore ? ` Deine Wertung: ${ratedScore} von 5.` : ''
+            }`}
           />
         ) : (
           <>
@@ -271,20 +318,6 @@ const styles = StyleSheet.create({
   footer: { padding: screenPadding.listener },
   trackCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   trackDetails: { flex: 1, gap: spacing.xs },
-  cover: {
-    width: touchTarget + spacing.md,
-    height: touchTarget + spacing.md,
-    borderRadius: radius.sm,
-    overflow: 'hidden',
-  },
-  coverCircle: {
-    position: 'absolute',
-    width: touchTarget + spacing.sm,
-    height: touchTarget + spacing.sm,
-    borderRadius: radius.pill,
-    left: -spacing.sm,
-    bottom: -spacing.md,
-  },
   confirmation: {
     flexGrow: 1,
     justifyContent: 'center',
