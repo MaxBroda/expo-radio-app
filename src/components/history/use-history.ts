@@ -2,17 +2,25 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useDemo } from '@/demo/demo-provider';
-import type { PlayedTrack } from '@/domain/track';
+import type { Score } from '@/domain/rating';
+import type { PlayedTrack, TrackId } from '@/domain/track';
+import { useRatingSubmission } from '@/stations/rating-provider';
 import { useStations } from '@/stations/stations-provider';
 
 export type HistoryState =
-  { status: 'loading' } | { status: 'loaded'; tracks: PlayedTrack[] } | { status: 'failed' };
+  | { status: 'loading' }
+  | { status: 'loaded'; tracks: PlayedTrack[]; scores: Map<TrackId, Score> }
+  | { status: 'failed' };
 
-const historyLength = 20;
+export const historyLength = 20;
 
-/** Refreshes quietly on focus so swiping between tabs keeps the list; a demo change shows loading. */
+/**
+ * Refreshes quietly on focus, so swiping between tabs keeps the list and a rating made in the
+ * modal shows up on return; a demo change shows loading.
+ */
 export function useHistory(): { state: HistoryState; retry: () => void } {
   const { playout } = useStations();
+  const ratings = useRatingSubmission();
   const { clock, settings } = useDemo();
   const [state, setState] = useState<HistoryState>({ status: 'loading' });
   const cancelPending = useRef(() => {});
@@ -23,12 +31,14 @@ export function useHistory(): { state: HistoryState; retry: () => void } {
       let current = true;
       cancelPending.current = () => (current = false);
       if (!quiet) setState({ status: 'loading' });
-      playout.getHistory(historyLength).then(
-        (tracks) => current && setState({ status: 'loaded', tracks }),
+      // Missing scores only hide the badges, the list itself is still right.
+      const scores = ratings.trackScores().catch(() => new Map<TrackId, Score>());
+      Promise.all([playout.getHistory(historyLength), scores]).then(
+        ([tracks, scores]) => current && setState({ status: 'loaded', tracks, scores }),
         () => current && setState({ status: 'failed' }),
       );
     },
-    [playout],
+    [playout, ratings],
   );
 
   useFocusEffect(useCallback(() => load(true), [load]));

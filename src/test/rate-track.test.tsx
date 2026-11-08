@@ -69,6 +69,17 @@ test('shows the track returned by the station with artist and start time', async
   expect(screen.getByRole('button', { name: 'Bewertung absenden' })).toBeDisabled();
 });
 
+test('loads the track again after a failed attempt', async () => {
+  const stations = await renderTrack(() => Promise.reject(new Error('unavailable')));
+  await screen.findByText('Titel gerade nicht verfügbar');
+
+  jest.mocked(stations.playout.getNowPlaying).mockResolvedValueOnce(playing);
+  await userEvent.press(screen.getByRole('button', { name: 'Erneut versuchen' }));
+
+  expect(await screen.findByText('Nordlicht')).toBeOnTheScreen();
+  expect(screen.queryByText('Titel gerade nicht verfügbar')).not.toBeOnTheScreen();
+});
+
 test('shows an error when the station cannot provide a track', async () => {
   await renderTrack(() => Promise.reject(new Error('unavailable')));
 
@@ -214,10 +225,13 @@ test('blocks a second rating when the screen is opened again', async () => {
   await screen.findByText('Danke, ist angekommen');
 
   await screenView.rerender(view('second'));
-  await screen.findByText('Nordlicht');
-  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
-  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
   expect(await screen.findByText('Schon bewertet')).toBeOnTheScreen();
+  expect(
+    screen.getByText(
+      'Pro Titel zählt eine Stimme, so bleibt das Stimmungsbild im Studio ehrlich. Deine Wertung: 4 von 5.',
+    ),
+  ).toBeOnTheScreen();
+  expect(screen.queryByRole('radio')).not.toBeOnTheScreen();
   expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(1);
 });
 

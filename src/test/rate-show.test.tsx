@@ -86,10 +86,11 @@ test('blocks a second rating for the same show', async () => {
   await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
   await screen.findByText('Danke, ist angekommen');
   await screenView.rerender(view('second'));
-  await screen.findByText('Lena Osterkamp');
-  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
-  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
   expect(await screen.findByText('Schon bewertet')).toBeOnTheScreen();
+  expect(
+    screen.getByText('Du hast diese Sendung bereits bewertet. Deine Wertung: 4 von 5.'),
+  ).toBeOnTheScreen();
+  expect(screen.queryByRole('radio')).not.toBeOnTheScreen();
   expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(1);
 });
 

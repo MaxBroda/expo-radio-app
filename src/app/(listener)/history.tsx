@@ -20,6 +20,10 @@ export default function HistoryScreen() {
   const now = useTickingNow();
   const { state, retry } = useHistory();
   const empty = state.status === 'loaded' && state.tracks.length === 0;
+  const ratedCount =
+    state.status === 'loaded'
+      ? state.tracks.filter(({ track }) => state.scores.has(track.id)).length
+      : 0;
 
   return (
     <AreaScreen
@@ -35,7 +39,9 @@ export default function HistoryScreen() {
           Wiedergabeverlauf
         </AppText>
         <AppText tone="secondary">
-          {empty ? 'Noch keine Titel heute' : 'Die zuletzt gespielten Titel'}
+          {empty
+            ? 'Noch keine Titel heute'
+            : `Tippen zum Bewerten${ratedCount > 0 ? ` · ${ratedCount} bereits bewertet` : ''}`}
         </AppText>
       </View>
 
@@ -83,7 +89,18 @@ export default function HistoryScreen() {
         <FlatList
           data={state.tracks}
           keyExtractor={(played) => played.startedAt.toISOString()}
-          renderItem={({ item }) => <HistoryRow played={item} />}
+          renderItem={({ item }) => (
+            <HistoryRow
+              played={item}
+              score={state.scores.get(item.track.id)}
+              onPress={() =>
+                router.push({
+                  pathname: '/rate/track',
+                  params: { trackId: item.track.id, startedAt: item.startedAt.getTime() },
+                })
+              }
+            />
+          )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
         />
