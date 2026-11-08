@@ -10,7 +10,7 @@ export async function submitRatingAndRemember(
 ): Promise<{ rating: Rating; remembered: boolean }> {
   const rating = await feedbackHub.submitRating(input);
   try {
-    await rememberRatingOnDevice(rating.subject, scope);
+    await rememberRatingOnDevice(rating.subject, rating.score, scope);
     return { rating, remembered: true };
   } catch {
     return { rating, remembered: false };

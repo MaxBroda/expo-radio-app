@@ -1,16 +1,30 @@
 import type { DemoClock } from '@/demo/demo-clock';
-import type { Score } from '@/domain/rating';
+import type { RatingSubject, Score } from '@/domain/rating';
 import type { FeedbackHub } from '@/ports/feedback-hub';
+import type { OwnRating } from '@/seed/own-ratings';
 
 import type { RatingTarget } from './rating-eligibility';
-import { clearDemoRatingHistory } from './rating-history';
+import {
+  clearDemoRatingHistory,
+  ratedScoreOnDevice,
+  rememberRatingOnDevice,
+  trackScoresOnDevice,
+} from './rating-history';
 import { createRatingSubmission } from './rating-submission';
+
+type Options = {
+  /** Forgets demo ratings left over from an earlier app session. */
+  resetOnStart?: boolean;
+  /** Off when a React effect calls `start()` and `dispose()` instead. */
+  subscribeOnCreate?: boolean;
+  /** Written after every reset, so the demo starts with ratings of its own. */
+  seed?: (now: Date) => OwnRating[];
+};
 
 export function createDemoRatingSubmission(
   feedbackHub: FeedbackHub,
   clock: DemoClock,
-  resetOnStart = false,
-  subscribeOnCreate = true,
+  { resetOnStart = false, subscribeOnCreate = true, seed = () => [] }: Options = {},
 ) {
   let flow = createRatingSubmission(feedbackHub, 'demo');
   let revision = 0;
@@ -36,6 +50,8 @@ export function createDemoRatingSubmission(
     while (clearedRevision !== revision) {
       const currentRevision = revision;
       await clearDemoRatingHistory();
+      for (const { subject, score } of seed(clock.now()))
+        await rememberRatingOnDevice(subject, score, 'demo');
       flow = createRatingSubmission(feedbackHub, 'demo');
       clearedRevision = currentRevision;
     }
@@ -86,5 +102,15 @@ export function createDemoRatingSubmission(
     }
   }
 
-  return { submit, retryLocalSave, start, dispose };
+  async function ratedScore(subject: RatingSubject): Promise<Score | undefined> {
+    if (!busy) await clearIfNeeded();
+    return ratedScoreOnDevice(subject, 'demo');
+  }
+
+  async function trackScores() {
+    if (!busy) await clearIfNeeded();
+    return trackScoresOnDevice('demo');
+  }
+
+  return { submit, retryLocalSave, ratedScore, trackScores, start, dispose };
 }

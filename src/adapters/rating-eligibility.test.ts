@@ -18,7 +18,7 @@ test('a track can be rated until this device has rated it', async () => {
   const target = { kind: 'track', trackId: 'track-1' as TrackId } as const;
   const now = new Date(2026, 9, 29, 18, 30);
   expect(await checkRatingEligibility(target, now)).toBe('allowed');
-  await rememberRatingOnDevice(target);
+  await rememberRatingOnDevice(target, 4);
   expect(await checkRatingEligibility(target, now)).toBe('alreadyRated');
 });
 
@@ -27,7 +27,7 @@ test('a show must be on air and not yet rated on this device', async () => {
   const show = schedule.showAt(now);
   const target = { kind: 'show', show } as const;
   expect(await checkRatingEligibility(target, now)).toBe('allowed');
-  await rememberRatingOnDevice({ kind: 'show', showId: show.id });
+  await rememberRatingOnDevice({ kind: 'show', showId: show.id }, 4);
   expect(await checkRatingEligibility(target, now)).toBe('alreadyRated');
   expect(await checkRatingEligibility(target, show.endsAt)).toBe('windowClosed');
 });
