@@ -27,7 +27,7 @@ test('a clock jump clears demo history before the next submission', async () => 
   const clock = new DemoClock(now, () => 0);
   const send = jest.fn(async (input: RatingInput) => rating(input));
   const flow = createDemoRatingSubmission({ submitRating: send, list: jest.fn() }, clock);
-  await rememberRatingOnDevice(track);
+  await rememberRatingOnDevice(track, 4);
   expect(await flow.submit(track, 4)).toMatchObject({ status: 'sent', remembered: true });
   expect(await flow.submit(track, 4)).toEqual({ status: 'alreadyRated' });
   clock.jumpTo(now);
@@ -40,9 +40,11 @@ test('a clock jump clears demo history before the next submission', async () => 
 test('a new demo session can clear old demo history without deleting device history', async () => {
   const clock = new DemoClock(now, () => 0);
   const send = jest.fn(async (input: RatingInput) => rating(input));
-  await rememberRatingOnDevice(track);
-  await rememberRatingOnDevice(track, 'demo');
-  const flow = createDemoRatingSubmission({ submitRating: send, list: jest.fn() }, clock, true);
+  await rememberRatingOnDevice(track, 4);
+  await rememberRatingOnDevice(track, 4, 'demo');
+  const flow = createDemoRatingSubmission({ submitRating: send, list: jest.fn() }, clock, {
+    resetOnStart: true,
+  });
 
   expect(await flow.submit(track, 4)).toMatchObject({ status: 'sent', remembered: true });
   expect(await hasRatedOnDevice(track)).toBe(true);
@@ -139,5 +141,36 @@ test('a jump while saving clears the old rating after the write finishes', async
   finish();
   expect(await first).toEqual({ status: 'demoChanged' });
   expect(await hasRatedOnDevice(track, 'demo')).toBe(false);
+  flow.dispose();
+});
+
+test('reads back the score of a sent rating until the demo clock jumps', async () => {
+  const clock = new DemoClock(now, () => 0);
+  const send = jest.fn(async (input: RatingInput) => rating(input));
+  const flow = createDemoRatingSubmission({ submitRating: send, list: jest.fn() }, clock);
+
+  await flow.submit(track, 2);
+  expect(await flow.ratedScore(track)).toBe(2);
+  expect(await flow.trackScores()).toEqual(new Map([['track-1', 2]]));
+
+  clock.jumpTo(now);
+  expect(await flow.ratedScore(track)).toBeUndefined();
+  expect(await flow.trackScores()).toEqual(new Map());
+  flow.dispose();
+});
+
+test('writes the seeded ratings on start and again after a clock jump', async () => {
+  const clock = new DemoClock(now, () => 0);
+  const seeded = { kind: 'track', trackId: 'track-9' as TrackId } as const;
+  const flow = createDemoRatingSubmission({ submitRating: jest.fn(), list: jest.fn() }, clock, {
+    resetOnStart: true,
+    seed: () => [{ subject: seeded, score: 2 }],
+  });
+
+  expect(await flow.ratedScore(seeded)).toBe(2);
+  expect(await flow.submit(seeded, 5)).toEqual({ status: 'alreadyRated' });
+
+  clock.jumpTo(now);
+  expect(await flow.trackScores()).toEqual(new Map([['track-9', 2]]));
   flow.dispose();
 });

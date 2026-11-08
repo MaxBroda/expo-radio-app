@@ -50,7 +50,7 @@ export function createRatingSubmission(feedbackHub: FeedbackHub, scope: HistoryS
     if (busy || !pendingRating) return false;
     busy = true;
     try {
-      await rememberRatingOnDevice(pendingRating.subject, scope);
+      await rememberRatingOnDevice(pendingRating.subject, pendingRating.score, scope);
       pendingRating = undefined;
       return true;
     } catch {

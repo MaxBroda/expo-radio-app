@@ -57,7 +57,7 @@ test('a new submission flow reads the saved rating', async () => {
 test('demo submission uses separate history and can be rated again after demo reset', async () => {
   const send = jest.fn(async (input: RatingInput) => makeRating(input));
   const flow = createRatingSubmission({ submitRating: send, list: jest.fn() }, 'demo');
-  await rememberRatingOnDevice(track);
+  await rememberRatingOnDevice(track, 4);
 
   expect(await flow.submit(track, 4, undefined, () => now)).toMatchObject({
     status: 'sent',
@@ -91,7 +91,7 @@ test('retry after a demo storage failure saves to the demo history', async () =>
 test('does not send an already rated track or a show outside its window', async () => {
   const send = jest.fn(async (input: RatingInput) => makeRating(input));
   const flow = createRatingSubmission({ submitRating: send, list: jest.fn() });
-  await rememberRatingOnDevice(track);
+  await rememberRatingOnDevice(track, 4);
   expect(await flow.submit(track, 3, undefined, () => now)).toEqual({ status: 'alreadyRated' });
   const show = schedule.showAt(now);
   expect(await flow.submit({ kind: 'show', show }, 3, undefined, () => show.endsAt)).toEqual({
