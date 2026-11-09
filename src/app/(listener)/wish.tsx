@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { CircleAlert, Search, WifiOff } from 'lucide-react-native';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useReducer, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AreaScreen } from '@/components/area-screen';
@@ -27,122 +27,239 @@ import { screenPadding, spacing, touchTarget, useTheme } from '@/theme';
 
 type Choice = { kind: 'catalog'; track: Track } | { kind: 'freeText'; description: string };
 
-type Popular = { wish: Wish; track?: Track };
+type PopularWish = {
+  wish: Wish;
+  track?: Track;
+};
 
-const popularCount = 3;
+type ScreenState = {
+  query: string;
+  choice: Choice | null;
+  greeting: string;
+  quota: WishQuota | null;
+  popular: PopularWish[] | null;
+  unreachable: boolean;
+  sending: boolean;
+  sendFailed: boolean;
+  alreadyRequested: boolean;
+};
 
-function toSong(choice: Choice): WishedSong {
-  return choice.kind === 'catalog'
-    ? { kind: 'catalog', trackId: choice.track.id }
-    : { kind: 'freeText', description: choice.description };
+type ScreenAction =
+  | { type: 'focusStarted' }
+  | { type: 'contentLoaded'; quota: WishQuota; popular: PopularWish[] }
+  | { type: 'contentFailed' }
+  | { type: 'queryChanged'; query: string }
+  | { type: 'choiceChanged'; choice: Choice }
+  | { type: 'greetingChanged'; greeting: string }
+  | { type: 'sendingStarted' }
+  | { type: 'sendingFinished' }
+  | { type: 'requestSent' }
+  | { type: 'quotaLoaded'; quota: WishQuota }
+  | { type: 'quotaFailed' }
+  | { type: 'duplicateRejected' }
+  | { type: 'requestFailed' };
+
+const popularLimit = 3;
+
+const initialState: ScreenState = {
+  query: '',
+  choice: null,
+  greeting: '',
+  quota: null,
+  popular: null,
+  unreachable: false,
+  sending: false,
+  sendFailed: false,
+  alreadyRequested: false,
+};
+
+function reduceScreen(state: ScreenState, action: ScreenAction): ScreenState {
+  switch (action.type) {
+    case 'focusStarted':
+      return { ...state, sendFailed: false, alreadyRequested: false };
+    case 'contentLoaded':
+      return {
+        ...state,
+        quota: action.quota,
+        popular: action.popular,
+        unreachable: false,
+      };
+    case 'contentFailed':
+      return { ...state, unreachable: true };
+    case 'queryChanged':
+      return {
+        ...state,
+        query: action.query,
+        choice: null,
+        sendFailed: false,
+        alreadyRequested: false,
+      };
+    case 'choiceChanged':
+      return {
+        ...state,
+        choice: action.choice,
+        sendFailed: false,
+        alreadyRequested: false,
+      };
+    case 'greetingChanged':
+      return { ...state, greeting: action.greeting };
+    case 'sendingStarted':
+      return { ...state, sending: true, sendFailed: false };
+    case 'sendingFinished':
+      return { ...state, sending: false };
+    case 'requestSent':
+      return { ...state, query: '', choice: null, greeting: '' };
+    case 'quotaLoaded':
+      return { ...state, quota: action.quota };
+    case 'quotaFailed':
+      return { ...state, unreachable: true };
+    case 'duplicateRejected':
+      return { ...state, alreadyRequested: true };
+    case 'requestFailed':
+      return { ...state, sendFailed: true };
+  }
 }
 
-async function loadPopular(wishSystem: WishSystem, musicDatabase: MusicDatabase) {
-  const open = (await wishSystem.list())
-    .filter((wish) => wish.status === 'open')
-    .sort((a, b) => b.votes - a.votes)
-    .slice(0, popularCount);
+function choiceToSong(choice: Choice): WishedSong {
+  if (choice.kind === 'catalog') {
+    return { kind: 'catalog', trackId: choice.track.id };
+  }
+
+  return { kind: 'freeText', description: choice.description };
+}
+
+async function fetchPopular(
+  wishSystem: WishSystem,
+  musicDatabase: MusicDatabase,
+): Promise<PopularWish[]> {
+  const wishes = await wishSystem.list();
+  const popular = wishes
+    .filter(({ status }) => status === 'open')
+    .sort((left, right) => right.votes - left.votes)
+    .slice(0, popularLimit);
+
   return Promise.all(
-    open.map(async (wish): Promise<Popular> => ({
-      wish,
-      track:
-        wish.song.kind === 'catalog' ? await musicDatabase.lookup(wish.song.trackId) : undefined,
-    })),
+    popular.map(async (wish) => {
+      const track =
+        wish.song.kind === 'catalog' ? await musicDatabase.lookup(wish.song.trackId) : undefined;
+
+      return { wish, track };
+    }),
   );
+}
+
+type Hint = {
+  text: string;
+  tone: 'muted' | 'accent' | 'critical';
+};
+
+function createHint(
+  choice: Choice | null,
+  validation: ReturnType<typeof validateWish>,
+  exhausted: boolean,
+  resetTime: string,
+  duplicate: boolean,
+): Hint {
+  if (exhausted) {
+    return {
+      text: `Kontingent erschöpft, ab ${resetTime} wieder möglich.`,
+      tone: 'muted',
+    };
+  }
+
+  if (duplicate) {
+    return { text: alreadyRequestedText, tone: 'critical' };
+  }
+
+  if (choice === null) {
+    return { text: problemText.songMissing, tone: 'muted' };
+  }
+
+  if (!validation.ok) {
+    return { text: problemText[validation.problems[0]], tone: 'critical' };
+  }
+
+  const selected = choice.kind === 'catalog' ? choice.track.title : 'Freitext-Wunsch';
+  return { text: `Gewählt: ${selected}`, tone: 'accent' };
 }
 
 export default function WishScreen() {
   const colors = useTheme();
   const { wishSystem, musicDatabase } = useStations();
-  const [query, setQuery] = useState('');
-  const [choice, setChoice] = useState<Choice | null>(null);
-  const [greeting, setGreeting] = useState('');
-  const [quota, setQuota] = useState<WishQuota | null>(null);
-  const [popular, setPopular] = useState<Popular[] | null>(null);
-  const [unreachable, setUnreachable] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [sendFailed, setSendFailed] = useState(false);
-  const [alreadyRequested, setAlreadyRequested] = useState(false);
-  const search = useTrackSearch(query);
+  const [state, dispatch] = useReducer(reduceScreen, initialState);
+  const search = useTrackSearch(state.query);
 
-  // Quota and list change in the studio and through the demo sheet, so both reload on every visit.
   useFocusEffect(
     useCallback(() => {
-      let current = true;
-      setSendFailed(false);
-      setAlreadyRequested(false);
-      Promise.all([wishSystem.quota(), loadPopular(wishSystem, musicDatabase)]).then(
-        ([nextQuota, nextPopular]) => {
-          if (!current) return;
-          setQuota(nextQuota);
-          setPopular(nextPopular);
-          setUnreachable(false);
+      let active = true;
+      dispatch({ type: 'focusStarted' });
+
+      Promise.all([wishSystem.quota(), fetchPopular(wishSystem, musicDatabase)]).then(
+        ([quota, popular]) => {
+          if (active) {
+            dispatch({ type: 'contentLoaded', quota, popular });
+          }
         },
-        () => current && setUnreachable(true),
+        () => {
+          if (active) {
+            dispatch({ type: 'contentFailed' });
+          }
+        },
       );
+
       return () => {
-        current = false;
+        active = false;
       };
-    }, [wishSystem, musicDatabase]),
+    }, [musicDatabase, wishSystem]),
   );
 
-  const validation = validateWish({ song: choice ? toSong(choice) : undefined, greeting });
-  const exhausted = quota?.exhausted ?? false;
-  const resetTime = quota ? clockTime(quota.resetsAt) : '';
+  const validation = validateWish({
+    song: state.choice === null ? undefined : choiceToSong(state.choice),
+    greeting: state.greeting,
+  });
+  const exhausted = state.quota?.exhausted ?? false;
+  const resetTime = state.quota === null ? '' : clockTime(state.quota.resetsAt);
   const canSend =
-    quota !== null && !exhausted && !unreachable && validation.ok && !sending && !alreadyRequested;
+    state.quota !== null &&
+    !exhausted &&
+    !state.unreachable &&
+    validation.ok &&
+    !state.sending &&
+    !state.alreadyRequested;
+  const hint = createHint(state.choice, validation, exhausted, resetTime, state.alreadyRequested);
 
-  function changeQuery(text: string) {
-    setQuery(text);
-    setChoice(null);
-    setSendFailed(false);
-    setAlreadyRequested(false);
-  }
-
-  function choose(next: Choice) {
-    setChoice(next);
-    setSendFailed(false);
-    setAlreadyRequested(false);
-  }
+  const changeQuery = (query: string) => dispatch({ type: 'queryChanged', query });
+  const choose = (choice: Choice) => dispatch({ type: 'choiceChanged', choice });
+  const changeGreeting = (greeting: string) => dispatch({ type: 'greetingChanged', greeting });
 
   async function send() {
-    if (!validation.ok) return;
-    setSending(true);
-    setSendFailed(false);
+    if (!validation.ok) {
+      return;
+    }
+
+    dispatch({ type: 'sendingStarted' });
+
     try {
       const wish = await wishSystem.submitRequest(validation.input);
-      setQuery('');
-      setChoice(null);
-      setGreeting('');
+      dispatch({ type: 'requestSent' });
       router.push({
         pathname: '/wish/sent',
         params: { id: wish.id, greeting: validation.input.greeting ?? '' },
       });
     } catch (error) {
       if (error instanceof WishRejectedError && error.reason === 'quotaExhausted') {
-        wishSystem.quota().then(setQuota, () => setUnreachable(true));
+        wishSystem.quota().then(
+          (quota) => dispatch({ type: 'quotaLoaded', quota }),
+          () => dispatch({ type: 'quotaFailed' }),
+        );
       } else if (error instanceof WishRejectedError && error.reason === 'alreadyRequested') {
-        setAlreadyRequested(true);
+        dispatch({ type: 'duplicateRejected' });
       } else {
-        setSendFailed(true);
+        dispatch({ type: 'requestFailed' });
       }
     } finally {
-      setSending(false);
+      dispatch({ type: 'sendingFinished' });
     }
-  }
-
-  let hint: { text: string; tone: 'muted' | 'accent' | 'critical' };
-  if (exhausted) {
-    hint = { text: `Kontingent erschöpft, ab ${resetTime} wieder möglich.`, tone: 'muted' };
-  } else if (alreadyRequested) {
-    hint = { text: alreadyRequestedText, tone: 'critical' };
-  } else if (!choice) {
-    hint = { text: problemText.songMissing, tone: 'muted' };
-  } else if (!validation.ok) {
-    hint = { text: problemText[validation.problems[0]], tone: 'critical' };
-  } else {
-    const label = choice.kind === 'catalog' ? choice.track.title : 'Freitext-Wunsch';
-    hint = { text: `Gewählt: ${label}`, tone: 'accent' };
   }
 
   return (
@@ -161,18 +278,18 @@ export default function WishScreen() {
         <TextField
           label="Titel oder Interpret suchen"
           hideLabel
-          value={query}
+          value={state.query}
           onChangeText={changeQuery}
           placeholder={
             exhausted ? `Suche pausiert bis ${resetTime}` : 'Titel oder Interpret suchen'
           }
-          disabled={exhausted || unreachable}
-          icon={<Search size={20} color={query ? colors.accent.base : colors.text.muted} />}
+          disabled={exhausted || state.unreachable}
+          icon={<Search size={20} color={state.query ? colors.accent.base : colors.text.muted} />}
         />
 
-        {quota && <QuotaMeter quota={quota} />}
+        {state.quota ? <QuotaMeter quota={state.quota} /> : null}
 
-        {unreachable ? (
+        {state.unreachable ? (
           <StatusBanner
             tone="error"
             title="Keine Verbindung"
@@ -188,11 +305,11 @@ export default function WishScreen() {
           />
         ) : (
           <>
-            <Choices
+            <ChoiceList
               search={search}
-              query={query}
-              popular={popular}
-              choice={choice}
+              query={state.query}
+              popular={state.popular}
+              choice={state.choice}
               onChoose={choose}
             />
             <TextField
@@ -201,8 +318,8 @@ export default function WishScreen() {
               multiline
               lines={2}
               maxLength={wishLimits.greetingMax}
-              value={greeting}
-              onChangeText={setGreeting}
+              value={state.greeting}
+              onChangeText={changeGreeting}
               placeholder="Grüße aus der Spätschicht …"
             />
           </>
@@ -210,18 +327,18 @@ export default function WishScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { borderTopColor: colors.line.default }]}>
-        {sendFailed && !exhausted && !unreachable && (
+        {state.sendFailed && !exhausted && !state.unreachable ? (
           <StatusBanner
             tone="error"
             title="Wunsch nicht gesendet"
             text="Das Studio ist gerade nicht erreichbar. Deine Auswahl bleibt erhalten."
           />
-        )}
+        ) : null}
         <AppText variant="label" tone={hint.tone}>
           {hint.text}
         </AppText>
         <AppButton
-          label={sending ? 'Wird gesendet …' : 'Wunsch absenden'}
+          label={state.sending ? 'Wird gesendet …' : 'Wunsch absenden'}
           onPress={send}
           disabled={!canSend}
         />
@@ -230,50 +347,52 @@ export default function WishScreen() {
   );
 }
 
-type ChoicesProps = {
+type ChoiceListProps = {
   search: TrackSearch;
   query: string;
-  popular: Popular[] | null;
+  popular: PopularWish[] | null;
   choice: Choice | null;
   onChoose: (choice: Choice) => void;
 };
 
-function Choices({ search, query, popular, choice, onChoose }: ChoicesProps) {
+function ChoiceList({ search, query, popular, choice, onChoose }: ChoiceListProps) {
   const colors = useTheme();
-  const isTrack = (track: Track) => choice?.kind === 'catalog' && choice.track.id === track.id;
-  const isText = (text: string) => choice?.kind === 'freeText' && choice.description === text;
+  const selectedTrack = (track: Track) =>
+    choice?.kind === 'catalog' && choice.track.id === track.id;
+  const selectedText = (description: string) =>
+    choice?.kind === 'freeText' && choice.description === description;
 
   if (search.status === 'idle') {
     return (
       <Section title="Oft gewünscht heute">
         {popular === null
-          ? [0, 1, 2].map((i) => <Skeleton key={i} width="100%" height={74} radius={14} />)
-          : popular.map(({ wish, track }) =>
-              wish.song.kind === 'catalog' ? (
-                track && (
+          ? [0, 1, 2].map((key) => <Skeleton key={key} width="100%" height={74} radius={14} />)
+          : popular.map(({ wish, track }) => {
+              if (wish.song.kind === 'catalog') {
+                return track ? (
                   <WishOption
                     key={wish.id}
                     title={track.title}
                     subtitle={trackLine(track, wish.votes)}
-                    selected={isTrack(track)}
+                    selected={selectedTrack(track)}
                     onPress={() => onChoose({ kind: 'catalog', track })}
                     leading={<CoverPlaceholder seed={track.id} />}
                   />
-                )
-              ) : (
+                ) : null;
+              }
+
+              const description = wish.song.description;
+              return (
                 <WishOption
                   key={wish.id}
                   title="Freitext-Wunsch"
-                  subtitle={`„${wish.song.description}“ · ${votesLabel(wish.votes)}`}
-                  selected={isText(wish.song.description)}
-                  onPress={() =>
-                    wish.song.kind === 'freeText' &&
-                    onChoose({ kind: 'freeText', description: wish.song.description })
-                  }
+                  subtitle={`„${description}“ · ${votesLabel(wish.votes)}`}
+                  selected={selectedText(description)}
+                  onPress={() => onChoose({ kind: 'freeText', description })}
                   leading={<CoverPlaceholder seed={wish.id} />}
                 />
-              ),
-            )}
+              );
+            })}
       </Section>
     );
   }
@@ -306,7 +425,7 @@ function Choices({ search, query, popular, choice, onChoose }: ChoicesProps) {
             key={track.id}
             title={track.title}
             subtitle={trackLine(track)}
-            selected={isTrack(track)}
+            selected={selectedTrack(track)}
             onPress={() => onChoose({ kind: 'catalog', track })}
             leading={<CoverPlaceholder seed={track.id} />}
           />
@@ -316,6 +435,7 @@ function Choices({ search, query, popular, choice, onChoose }: ChoicesProps) {
   }
 
   const description = query.trim();
+
   return (
     <View style={styles.section}>
       <View style={styles.noHit}>
@@ -331,7 +451,7 @@ function Choices({ search, query, popular, choice, onChoose }: ChoicesProps) {
         eyebrow="Als Freitext-Wunsch"
         title={`„${description}“`}
         subtitle=""
-        selected={isText(description)}
+        selected={selectedText(description)}
         onPress={() => onChoose({ kind: 'freeText', description })}
       />
     </View>
@@ -350,10 +470,21 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  content: { gap: spacing.lg, paddingBottom: spacing.lg },
-  section: { gap: spacing.sm },
-  noHit: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  scroll: {
+    flex: 1,
+  },
+  content: {
+    gap: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  section: {
+    gap: spacing.sm,
+  },
+  noHit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
   noHitIcon: {
     width: touchTarget,
     height: touchTarget,
@@ -363,7 +494,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noHitText: { flex: 1 },
+  noHitText: {
+    flex: 1,
+  },
   footer: {
     gap: spacing.md,
     marginHorizontal: -screenPadding.listener,

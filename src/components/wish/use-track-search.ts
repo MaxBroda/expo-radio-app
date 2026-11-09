@@ -9,35 +9,53 @@ export type TrackSearch =
   | { status: 'done'; tracks: Track[] }
   | { status: 'failed' };
 
-const minQueryLength = 2;
-const debounceMs = 250;
+type StoredResult = { query: string; tracks: Track[] } | { query: string; failed: true };
 
-type Result = { query: string; tracks: Track[] } | { query: string; failed: true };
+const minimumQueryLength = 2;
+const searchDelay = 250;
 
-/** Waits until typing pauses, and ignores answers that arrive for an older query. */
 export function useTrackSearch(query: string): TrackSearch {
   const { musicDatabase } = useStations();
-  const [result, setResult] = useState<Result | null>(null);
-  const trimmed = query.trim();
-  const active = trimmed.length >= minQueryLength;
+  const [lastResult, setLastResult] = useState<StoredResult | null>(null);
+  const normalizedQuery = query.trim();
+  const enabled = normalizedQuery.length >= minimumQueryLength;
 
   useEffect(() => {
-    if (!active) return;
-    let current = true;
-    const timer = setTimeout(() => {
-      musicDatabase.search(trimmed).then(
-        (tracks) => current && setResult({ query: trimmed, tracks }),
-        () => current && setResult({ query: trimmed, failed: true }),
-      );
-    }, debounceMs);
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-  }, [active, trimmed, musicDatabase]);
+    if (!enabled) {
+      return undefined;
+    }
 
-  if (!active) return { status: 'idle' };
-  if (!result || result.query !== trimmed) return { status: 'searching' };
-  if ('failed' in result) return { status: 'failed' };
-  return { status: 'done', tracks: result.tracks };
+    let acceptsResult = true;
+    const timeout = setTimeout(() => {
+      musicDatabase.search(normalizedQuery).then(
+        (tracks) => {
+          if (acceptsResult) {
+            setLastResult({ query: normalizedQuery, tracks });
+          }
+        },
+        () => {
+          if (acceptsResult) {
+            setLastResult({ query: normalizedQuery, failed: true });
+          }
+        },
+      );
+    }, searchDelay);
+
+    return () => {
+      acceptsResult = false;
+      clearTimeout(timeout);
+    };
+  }, [enabled, musicDatabase, normalizedQuery]);
+
+  if (!enabled) {
+    return { status: 'idle' };
+  }
+  if (lastResult === null || lastResult.query !== normalizedQuery) {
+    return { status: 'searching' };
+  }
+  if ('failed' in lastResult) {
+    return { status: 'failed' };
+  }
+
+  return { status: 'done', tracks: lastResult.tracks };
 }

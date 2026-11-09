@@ -13,24 +13,32 @@ import { createStubStations, type Stations } from '@/stations/stations';
 import { StationsProvider } from '@/stations/stations-provider';
 import { ThemeProvider } from '@/theme';
 
-const searchLabel = 'Titel oder Interpret suchen';
-const wait = { timeout: 3000 };
+const searchFieldLabel = 'Titel oder Interpret suchen';
+const asyncOptions = { timeout: 3000 };
 
-async function setup(flags: Partial<DemoFlags> = {}) {
+async function renderWishFlow(initialFlags: Partial<DemoFlags> = {}) {
   const clock = new DemoClock(new Date(2026, 9, 15, 18, 42));
   const settings = new DemoSettings();
-  settings.set(flags);
-  const context = { now: () => clock.now(), flags: () => settings.get() };
+  settings.set(initialFlags);
+
+  const context = {
+    now: () => clock.now(),
+    flags: () => settings.get(),
+  };
+
   const stations: Stations = {
     ...createStubStations(context),
     musicDatabase: new StubMusicDatabase({
       delayMs: 0,
       connection: () => settings.get().connection,
     }),
-    wishSystem: new StubWishSystem({ ...context, delayMs: 0 }),
+    wishSystem: new StubWishSystem({
+      ...context,
+      delayMs: 0,
+    }),
   };
 
-  function Layout() {
+  function TestLayout() {
     return (
       <ThemeProvider initialPreference="dark">
         <DemoProvider clock={clock} settings={settings}>
@@ -42,131 +50,144 @@ async function setup(flags: Partial<DemoFlags> = {}) {
     );
   }
 
-  const app = await renderRouter(
-    { _layout: Layout, index: WishScreen, 'wish/sent': WishSentScreen },
+  const application = await renderRouter(
+    {
+      _layout: TestLayout,
+      index: WishScreen,
+      'wish/sent': WishSentScreen,
+    },
     { initialUrl: '/' },
   );
-  const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-  return { user, settings, getPathname: app.getPathname };
+
+  return {
+    user: userEvent.setup({ advanceTimers: jest.advanceTimersByTime }),
+    settings,
+    pathname: application.getPathname,
+  };
 }
 
 const sendButton = () => screen.getByRole('button', { name: 'Wunsch absenden' });
+const waitForPopularSongs = () => screen.findByText('Landungsbrücken raus', {}, asyncOptions);
 
-test('starts with the most requested songs, the full quota and a disabled button', async () => {
-  await setup();
+describe('listener wish flow', () => {
+  it('shows popular songs, the available quota and a disabled send action initially', async () => {
+    await renderWishFlow();
 
-  expect(await screen.findByText('Landungsbrücken raus', {}, wait)).toBeTruthy();
-  expect(screen.getByText('Noch 3 von 3 Wünschen frei · zurückgesetzt 19:00')).toBeTruthy();
-  expect(screen.getByText('Wähle oben einen Titel aus.')).toBeTruthy();
-  expect(sendButton()).toBeDisabled();
-});
+    expect(await waitForPopularSongs()).toBeTruthy();
+    expect(screen.getByText('Noch 3 von 3 Wünschen frei · zurückgesetzt 19:00')).toBeTruthy();
+    expect(screen.getByText('Wähle oben einen Titel aus.')).toBeTruthy();
+    expect(sendButton()).toBeDisabled();
+  });
 
-test('a catalog hit with greeting reaches the studio', async () => {
-  const { user, getPathname } = await setup();
-  await screen.findByText('Landungsbrücken raus', {}, wait);
+  it('submits a catalog result together with a greeting', async () => {
+    const { user, pathname } = await renderWishFlow();
+    await waitForPopularSongs();
 
-  await user.type(screen.getByLabelText(searchLabel), 'grönemeyer');
-  await user.press(await screen.findByText('Mensch', {}, wait));
-  await user.type(screen.getByLabelText(/^Gruß an die Moderation/), 'Hallo Studio');
+    await user.type(screen.getByLabelText(searchFieldLabel), 'grönemeyer');
+    await user.press(await screen.findByText('Mensch', {}, asyncOptions));
+    await user.type(screen.getByLabelText(/^Gruß an die Moderation/), 'Hallo Studio');
 
-  expect(screen.getByText('Gewählt: Mensch')).toBeTruthy();
-  await user.press(sendButton());
+    expect(screen.getByText('Gewählt: Mensch')).toBeTruthy();
+    await user.press(sendButton());
 
-  expect(await screen.findByText('Wunsch ist im Studio', {}, wait)).toBeTruthy();
-  expect(getPathname()).toBe('/wish/sent');
-  expect(await screen.findByText('Gruß: „Hallo Studio“', {}, wait)).toBeTruthy();
-  expect(screen.getByText('Noch 2 von 3 Wünschen frei · zurückgesetzt 19:00')).toBeTruthy();
-});
+    expect(await screen.findByText('Wunsch ist im Studio', {}, asyncOptions)).toBeTruthy();
+    expect(pathname()).toBe('/wish/sent');
+    expect(await screen.findByText('Gruß: „Hallo Studio“', {}, asyncOptions)).toBeTruthy();
+    expect(screen.getByText('Noch 2 von 3 Wünschen frei · zurückgesetzt 19:00')).toBeTruthy();
+  });
 
-test('without a catalog hit the description goes to the studio as free text', async () => {
-  const { user } = await setup();
-  await screen.findByText('Landungsbrücken raus', {}, wait);
+  it('submits the search text when the catalog contains no match', async () => {
+    const { user } = await renderWishFlow();
+    await waitForPopularSongs();
 
-  await user.type(screen.getByLabelText(searchLabel), 'pfeifen am anfang');
-  expect(await screen.findByText('Kein Treffer im Katalog', {}, wait)).toBeTruthy();
-  await user.press(screen.getByText('„pfeifen am anfang“'));
+    await user.type(screen.getByLabelText(searchFieldLabel), 'pfeifen am anfang');
+    expect(await screen.findByText('Kein Treffer im Katalog', {}, asyncOptions)).toBeTruthy();
+    await user.press(screen.getByText('„pfeifen am anfang“'));
 
-  expect(screen.getByText('Gewählt: Freitext-Wunsch')).toBeTruthy();
-  await user.press(sendButton());
+    expect(screen.getByText('Gewählt: Freitext-Wunsch')).toBeTruthy();
+    await user.press(sendButton());
 
-  expect(await screen.findByText('Wunsch ist im Studio', {}, wait)).toBeTruthy();
-  expect(await screen.findByText('„pfeifen am anfang“', {}, wait)).toBeTruthy();
-});
+    expect(await screen.findByText('Wunsch ist im Studio', {}, asyncOptions)).toBeTruthy();
+    expect(await screen.findByText('„pfeifen am anfang“', {}, asyncOptions)).toBeTruthy();
+  });
 
-test('a free text below the minimum length cannot be sent', async () => {
-  const { user } = await setup();
-  await screen.findByText('Landungsbrücken raus', {}, wait);
+  it('keeps an undersized free-text request from being submitted', async () => {
+    const { user } = await renderWishFlow();
+    await waitForPopularSongs();
 
-  await user.type(screen.getByLabelText(searchLabel), 'xq');
-  await user.press(await screen.findByText('„xq“', {}, wait));
+    await user.type(screen.getByLabelText(searchFieldLabel), 'xq');
+    await user.press(await screen.findByText('„xq“', {}, asyncOptions));
 
-  expect(screen.getByText('Beschreib den Song mit mindestens 3 Zeichen.')).toBeTruthy();
-  expect(sendButton()).toBeDisabled();
-});
+    expect(screen.getByText('Beschreib den Song mit mindestens 3 Zeichen.')).toBeTruthy();
+    expect(sendButton()).toBeDisabled();
+  });
 
-test('an exhausted quota pauses search and sending', async () => {
-  await setup({ quotaExhausted: true });
+  it('disables search and sending while the quota is exhausted', async () => {
+    await renderWishFlow({ quotaExhausted: true });
 
-  expect(await screen.findByText('Kontingent erschöpft', {}, wait)).toBeTruthy();
-  expect(screen.getByPlaceholderText('Suche pausiert bis 19:00')).toBeTruthy();
-  expect(screen.getByText('Kontingent erschöpft, ab 19:00 wieder möglich.')).toBeTruthy();
-  expect(screen.queryByText('Landungsbrücken raus')).toBeNull();
-  expect(sendButton()).toBeDisabled();
-});
+    expect(await screen.findByText('Kontingent erschöpft', {}, asyncOptions)).toBeTruthy();
+    expect(screen.getByPlaceholderText('Suche pausiert bis 19:00')).toBeTruthy();
+    expect(screen.getByText('Kontingent erschöpft, ab 19:00 wieder möglich.')).toBeTruthy();
+    expect(screen.queryByText('Landungsbrücken raus')).toBeNull();
+    expect(sendButton()).toBeDisabled();
+  });
 
-test('failed sending keeps the choice so the listener can retry', async () => {
-  const { user, getPathname } = await setup({ sendFails: true });
-  await screen.findByText('Landungsbrücken raus', {}, wait);
+  it('retains the selected song when submission fails', async () => {
+    const { user, pathname } = await renderWishFlow({ sendFails: true });
+    await waitForPopularSongs();
 
-  await user.type(screen.getByLabelText(searchLabel), 'grönemeyer');
-  await user.press(await screen.findByText('Mensch', {}, wait));
-  await user.press(sendButton());
+    await user.type(screen.getByLabelText(searchFieldLabel), 'grönemeyer');
+    await user.press(await screen.findByText('Mensch', {}, asyncOptions));
+    await user.press(sendButton());
 
-  expect(await screen.findByText('Wunsch nicht gesendet', {}, wait)).toBeTruthy();
-  expect(screen.getByText('Gewählt: Mensch')).toBeTruthy();
-  expect(getPathname()).toBe('/');
-});
+    expect(await screen.findByText('Wunsch nicht gesendet', {}, asyncOptions)).toBeTruthy();
+    expect(screen.getByText('Gewählt: Mensch')).toBeTruthy();
+    expect(pathname()).toBe('/');
+  });
 
-test('without connection the screen says so instead of showing an empty list', async () => {
-  await setup({ connection: 'offline' });
+  it('shows a connection error instead of an empty popular list', async () => {
+    await renderWishFlow({ connection: 'offline' });
 
-  expect(await screen.findByText('Keine Verbindung', {}, wait)).toBeTruthy();
-  expect(sendButton()).toBeDisabled();
-});
+    expect(await screen.findByText('Keine Verbindung', {}, asyncOptions)).toBeTruthy();
+    expect(sendButton()).toBeDisabled();
+  });
 
-test('a failed send is no longer reported once the listener comes back with the quota used up', async () => {
-  const { user, settings } = await setup({ sendFails: true });
-  await screen.findByText('Landungsbrücken raus', {}, wait);
-  await user.press(screen.getByText('Landungsbrücken raus'));
-  await user.press(sendButton());
-  expect(await screen.findByText('Wunsch nicht gesendet', {}, wait)).toBeTruthy();
+  it('clears a previous send error when returning with an exhausted quota', async () => {
+    const { user, settings } = await renderWishFlow({ sendFails: true });
+    await waitForPopularSongs();
 
-  settings.set({ sendFails: false, quotaExhausted: true });
-  await act(() => router.push('/wish/sent?id=w_01'));
-  await act(() => router.back());
+    await user.press(screen.getByText('Landungsbrücken raus'));
+    await user.press(sendButton());
+    expect(await screen.findByText('Wunsch nicht gesendet', {}, asyncOptions)).toBeTruthy();
 
-  expect(await screen.findByText('Kontingent erschöpft', {}, wait)).toBeTruthy();
-  expect(screen.queryByText('Wunsch nicht gesendet')).toBeNull();
-});
+    settings.set({ sendFails: false, quotaExhausted: true });
+    await act(() => router.push('/wish/sent?id=w_01'));
+    await act(() => router.back());
 
-test('a song the listener already supports cannot be pushed with a second wish', async () => {
-  const { user, getPathname } = await setup();
-  await user.press(await screen.findByText('Landungsbrücken raus', {}, wait));
-  await user.press(sendButton());
-  expect(await screen.findByText('25', {}, wait)).toBeTruthy();
+    expect(await screen.findByText('Kontingent erschöpft', {}, asyncOptions)).toBeTruthy();
+    expect(screen.queryByText('Wunsch nicht gesendet')).toBeNull();
+  });
 
-  await user.press(screen.getByRole('button', { name: 'Fertig' }));
-  await user.press(await screen.findByText('Landungsbrücken raus', {}, wait));
-  await user.press(sendButton());
+  it('prevents a second vote from the same listener for the same open song', async () => {
+    const { user, pathname } = await renderWishFlow();
 
-  expect(
-    await screen.findByText(
-      'Diesen Titel hast du schon gewünscht. Pro Titel zählt eine Stimme.',
-      {},
-      wait,
-    ),
-  ).toBeTruthy();
-  expect(sendButton()).toBeDisabled();
-  expect(screen.getByText('Noch 2 von 3 Wünschen frei · zurückgesetzt 19:00')).toBeTruthy();
-  expect(getPathname()).toBe('/');
+    await user.press(await waitForPopularSongs());
+    await user.press(sendButton());
+    expect(await screen.findByText('25', {}, asyncOptions)).toBeTruthy();
+
+    await user.press(screen.getByRole('button', { name: 'Fertig' }));
+    await user.press(await waitForPopularSongs());
+    await user.press(sendButton());
+
+    expect(
+      await screen.findByText(
+        'Diesen Titel hast du schon gewünscht. Pro Titel zählt eine Stimme.',
+        {},
+        asyncOptions,
+      ),
+    ).toBeTruthy();
+    expect(sendButton()).toBeDisabled();
+    expect(screen.getByText('Noch 2 von 3 Wünschen frei · zurückgesetzt 19:00')).toBeTruthy();
+    expect(pathname()).toBe('/');
+  });
 });
