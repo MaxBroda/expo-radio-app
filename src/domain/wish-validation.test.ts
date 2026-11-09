@@ -1,67 +1,75 @@
 import type { TrackId } from './track';
-import { validateWish, wishLimits } from './wish-validation';
+import { validateWish, wishLimits, type WishProblem, type WishValidation } from './wish-validation';
 
 const catalogSong = { kind: 'catalog', trackId: 't_0001' as TrackId } as const;
-const freeText = (description: string) => ({ kind: 'freeText', description }) as const;
+const textSong = (description: string) => ({ kind: 'freeText', description }) as const;
 
-test('a catalog track without greeting is valid', () => {
-  expect(validateWish({ song: catalogSong })).toEqual({ ok: true, input: { song: catalogSong } });
-});
+function expectInvalid(result: WishValidation, problems: WishProblem[]) {
+  expect(result).toEqual({ ok: false, problems });
+}
 
-test('a wish needs a catalog track or a free text', () => {
-  expect(validateWish({ greeting: 'Hallo Studio' })).toEqual({
-    ok: false,
-    problems: ['songMissing'],
-  });
-});
-
-test('free text is trimmed and inner whitespace collapsed', () => {
-  const result = validateWish({ song: freeText('  das Lied   mit dem\nPfeifen  ') });
-
-  expect(result).toEqual({
-    ok: true,
-    input: { song: freeText('das Lied mit dem Pfeifen') },
-  });
-});
-
-test.each([
-  ['ab', 'freeTextTooShort'],
-  ['   ', 'freeTextTooShort'],
-  ['x'.repeat(wishLimits.freeTextMax + 1), 'freeTextTooLong'],
-])('free text %j is rejected as %s', (description, problem) => {
-  expect(validateWish({ song: freeText(description) })).toEqual({ ok: false, problems: [problem] });
-});
-
-test('free text at the limits is accepted', () => {
-  expect(validateWish({ song: freeText('abc') }).ok).toBe(true);
-  expect(validateWish({ song: freeText('x'.repeat(wishLimits.freeTextMax)) }).ok).toBe(true);
-});
-
-test('an empty greeting is dropped', () => {
-  expect(validateWish({ song: catalogSong, greeting: '   ' })).toEqual({
-    ok: true,
-    input: { song: catalogSong },
-  });
-});
-
-test('the greeting is trimmed and limited', () => {
-  const atLimit = 'g'.repeat(wishLimits.greetingMax);
-
-  expect(validateWish({ song: catalogSong, greeting: ` ${atLimit} ` })).toEqual({
-    ok: true,
-    input: { song: catalogSong, greeting: atLimit },
-  });
-  expect(validateWish({ song: catalogSong, greeting: `${atLimit}g` })).toEqual({
-    ok: false,
-    problems: ['greetingTooLong'],
-  });
-});
-
-test('all problems are reported at once', () => {
-  const result = validateWish({
-    song: freeText('ab'),
-    greeting: 'g'.repeat(wishLimits.greetingMax + 1),
+describe('validateWish', () => {
+  it('accepts a catalog song without a greeting', () => {
+    expect(validateWish({ song: catalogSong })).toEqual({
+      ok: true,
+      input: { song: catalogSong },
+    });
   });
 
-  expect(result).toEqual({ ok: false, problems: ['freeTextTooShort', 'greetingTooLong'] });
+  it('requires either a catalog song or a text description', () => {
+    expectInvalid(validateWish({ greeting: 'Hallo Studio' }), ['songMissing']);
+  });
+
+  it('normalizes whitespace in text descriptions', () => {
+    expect(validateWish({ song: textSong('  das Lied   mit dem\nPfeifen  ') })).toEqual({
+      ok: true,
+      input: { song: textSong('das Lied mit dem Pfeifen') },
+    });
+  });
+
+  it.each([
+    ['ab', 'freeTextTooShort'],
+    ['   ', 'freeTextTooShort'],
+    ['x'.repeat(wishLimits.freeTextMax + 1), 'freeTextTooLong'],
+  ] as const)('rejects invalid text %j with %s', (description: string, problem: WishProblem) => {
+    expectInvalid(validateWish({ song: textSong(description) }), [problem]);
+  });
+
+  it('accepts text exactly at both length boundaries', () => {
+    const minimum = validateWish({ song: textSong('abc') });
+    const maximum = validateWish({ song: textSong('x'.repeat(wishLimits.freeTextMax)) });
+
+    expect(minimum.ok).toBe(true);
+    expect(maximum.ok).toBe(true);
+  });
+
+  it('removes an empty greeting', () => {
+    expect(validateWish({ song: catalogSong, greeting: '   ' })).toEqual({
+      ok: true,
+      input: { song: catalogSong },
+    });
+  });
+
+  it('trims greetings and applies their length limit', () => {
+    const allowedGreeting = 'g'.repeat(wishLimits.greetingMax);
+
+    expect(validateWish({ song: catalogSong, greeting: ` ${allowedGreeting} ` })).toEqual({
+      ok: true,
+      input: { song: catalogSong, greeting: allowedGreeting },
+    });
+
+    expectInvalid(validateWish({ song: catalogSong, greeting: `${allowedGreeting}g` }), [
+      'greetingTooLong',
+    ]);
+  });
+
+  it('returns every validation problem in one result', () => {
+    expectInvalid(
+      validateWish({
+        song: textSong('ab'),
+        greeting: 'g'.repeat(wishLimits.greetingMax + 1),
+      }),
+      ['freeTextTooShort', 'greetingTooLong'],
+    );
+  });
 });
