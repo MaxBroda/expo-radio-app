@@ -20,19 +20,30 @@ export type Stations = {
   notifications: NotificationService;
 };
 
-/** What the stubs read from the demo: its clock and the states forced in the demo sheet. */
-export type StubContext = { now: () => Date; flags: () => DemoFlags };
-const realTime: StubContext = { now: () => new Date(), flags: () => defaultFlags };
+export type StubContext = {
+  now: () => Date;
+  flags: () => DemoFlags;
+};
+
+const defaultContext: StubContext = {
+  now: () => new Date(),
+  flags: () => defaultFlags,
+};
 
 export function createStubStations(
-  context: StubContext = realTime,
+  context: StubContext = defaultContext,
   clock = new DemoClock(demoMoment(schedule.slot('feierabend'))),
 ): Stations {
-  return {
-    playout: new StubPlayout({ now: context.now, flags: context.flags }),
-    musicDatabase: new StubMusicDatabase({ connection: () => context.flags().connection }),
-    feedbackHub: new StubFeedbackHub(clock, { get: context.flags }),
-    wishSystem: new StubWishSystem({ now: context.now, flags: context.flags }),
-    notifications: new StubNotificationService(),
-  };
+  const playout = new StubPlayout({ now: context.now, flags: context.flags });
+  const feedbackHub = new StubFeedbackHub(clock, { get: context.flags });
+  const notifications = new StubNotificationService();
+  const musicDatabase = new StubMusicDatabase({
+    connection: () => context.flags().connection,
+  });
+  const wishSystem = new StubWishSystem({
+    now: context.now,
+    flags: context.flags,
+  });
+
+  return { playout, musicDatabase, feedbackHub, wishSystem, notifications };
 }

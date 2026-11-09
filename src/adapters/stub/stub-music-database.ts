@@ -1,11 +1,14 @@
 import type { Connection } from '@/demo/demo-settings';
 import type { Track, TrackId } from '@/domain/track';
 import type { MusicDatabase } from '@/ports/music-database';
-import { catalog as seedCatalog, type CatalogTrack } from '@/seed/catalog';
+import { catalog as defaultCatalog, type CatalogTrack } from '@/seed/catalog';
 
 import { reachStation } from './reach-station';
 
-export const searchLimits = { minQueryLength: 2, maxResults: 10 } as const;
+export const searchLimits = {
+  minQueryLength: 2,
+  maxResults: 10,
+} as const;
 
 type Options = {
   catalog?: readonly CatalogTrack[];
@@ -13,62 +16,83 @@ type Options = {
   connection?: () => Connection;
 };
 
-/** Lowercase without accents, so "beyonce" finds "Beyoncé" and "strasse" finds "Straße". */
-function fold(text: string): string {
-  return text
+type SearchEntry = {
+  source: CatalogTrack;
+  titleKey: string;
+  artistKey: string;
+};
+
+function searchKey(value: string): string {
+  return value
     .toLocaleLowerCase('de')
     .replace(/ß/g, 'ss')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 }
 
-function toTrack({ id, title, artist, album, year, durationSec }: CatalogTrack): Track {
+function exposeTrack(track: CatalogTrack): Track {
+  const { id, title, artist, album, year, durationSec } = track;
   return { id, title, artist, album, year, durationSec };
 }
 
-type Indexed = { track: CatalogTrack; title: string; artist: string };
-
-function rank(entry: Indexed, query: string): number {
-  if (entry.title.startsWith(query)) return 0;
-  if (entry.artist.startsWith(query)) return 1;
+function matchPriority(entry: SearchEntry, query: string): number {
+  if (entry.titleKey.startsWith(query)) {
+    return 0;
+  }
+  if (entry.artistKey.startsWith(query)) {
+    return 1;
+  }
   return 2;
 }
 
 export class StubMusicDatabase implements MusicDatabase {
-  private readonly index: Indexed[];
-  private readonly delayMs: number;
-  private readonly connection: () => Connection;
+  private readonly entries: SearchEntry[];
+  private readonly latency: number;
+  private readonly getConnection: () => Connection;
 
-  constructor({ catalog = seedCatalog, delayMs = 300, connection = () => 'online' }: Options = {}) {
-    this.index = catalog.map((track) => ({
-      track,
-      title: fold(track.title),
-      artist: fold(track.artist),
+  constructor(options: Options = {}) {
+    const { catalog = defaultCatalog, delayMs = 300, connection = () => 'online' } = options;
+
+    this.entries = catalog.map((source) => ({
+      source,
+      titleKey: searchKey(source.title),
+      artistKey: searchKey(source.artist),
     }));
-    this.delayMs = delayMs;
-    this.connection = connection;
+    this.latency = delayMs;
+    this.getConnection = connection;
   }
 
   async search(query: string): Promise<Track[]> {
-    await this.reach();
-    const folded = fold(query).replace(/\s+/g, ' ').trim();
-    if (folded.length < searchLimits.minQueryLength) return [];
+    await this.ensureReachable();
 
-    const words = folded.split(' ');
-    return this.index
-      .filter((entry) => words.every((w) => entry.title.includes(w) || entry.artist.includes(w)))
-      .sort((a, b) => rank(a, folded) - rank(b, folded) || a.title.localeCompare(b.title, 'de'))
-      .slice(0, searchLimits.maxResults)
-      .map((entry) => toTrack(entry.track));
+    const normalizedQuery = searchKey(query).replace(/\s+/g, ' ').trim();
+    if (normalizedQuery.length < searchLimits.minQueryLength) {
+      return [];
+    }
+
+    const terms = normalizedQuery.split(' ');
+    const matches = this.entries.filter(({ titleKey, artistKey }) =>
+      terms.every((term) => titleKey.includes(term) || artistKey.includes(term)),
+    );
+
+    matches.sort((left, right) => {
+      const priorityDifference =
+        matchPriority(left, normalizedQuery) - matchPriority(right, normalizedQuery);
+
+      return priorityDifference || left.titleKey.localeCompare(right.titleKey, 'de');
+    });
+
+    return matches.slice(0, searchLimits.maxResults).map(({ source }) => exposeTrack(source));
   }
 
   async lookup(id: TrackId): Promise<Track | undefined> {
-    await this.reach();
-    const entry = this.index.find((e) => e.track.id === id);
-    return entry && toTrack(entry.track);
+    await this.ensureReachable();
+
+    const found = this.entries.find(({ source }) => source.id === id);
+    return found === undefined ? undefined : exposeTrack(found.source);
   }
 
-  private reach() {
-    return reachStation('MusicDatabase', this.delayMs, this.connection);
+  private ensureReachable(): Promise<void> {
+    return reachStation('MusicDatabase', this.latency, this.getConnection);
   }
 }
