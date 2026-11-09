@@ -188,3 +188,18 @@ test('the demo sheet jumps between shows', async () => {
   expect(pill('23:00 Nachtschiene')).toBeSelected();
   expect(pill('18:00 Feierabendwelle')).not.toBeSelected();
 });
+
+test('chooses a simulated listener and resets to the first listener', async () => {
+  const user = setupUser();
+  await renderApp();
+  const pill = (name: string) => screen.getByRole('button', { name });
+
+  await user.press(screen.getByLabelText('Demo-Steuerung öffnen'));
+  expect(pill('Hörer 1')).toBeSelected();
+  await user.press(pill('Hörer 2'));
+  expect(pill('Hörer 2')).toBeSelected();
+  expect(pill('Hörer 1')).not.toBeSelected();
+  await user.press(pill('Alles zurücksetzen'));
+  expect(pill('Hörer 1')).toBeSelected();
+  expect(pill('Hörer 2')).not.toBeSelected();
+});

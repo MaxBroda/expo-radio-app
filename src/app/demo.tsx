@@ -7,7 +7,7 @@ import { DemoBadge } from '@/components/demo-badge';
 import { AppButton, AppText, Pill, Tappable } from '@/components/ui';
 import { demoMoment } from '@/demo/demo-clock';
 import { useDemo, useDemoFlags, useDemoSlot } from '@/demo/demo-provider';
-import type { DemoFlags } from '@/demo/demo-settings';
+import type { DemoFlags, DemoListener } from '@/demo/demo-settings';
 import { useRole, type Role } from '@/role/role-provider';
 import { schedule, type Slot } from '@/seed/schedule';
 import {
@@ -92,6 +92,8 @@ const stateChoices: readonly StateChoice[] = [
   },
 ];
 
+const listeners: DemoListener[] = [1, 2, 3];
+
 const themeChoices: readonly ThemeChoice[] = [
   { value: 'system', label: 'System' },
   { value: 'light', label: 'Hell' },
@@ -169,6 +171,20 @@ export default function DemoSheet() {
 
           <ControlSection title="Rolle">
             <RoleSelector activeRole={role} onSelect={selectRole} />
+          </ControlSection>
+
+          <ControlSection title="Simulierter Hörer">
+            <View style={styles.pillRow}>
+              {listeners.map((listener) => (
+                <Pill
+                  key={listener}
+                  label={`Hörer ${listener}`}
+                  size="large"
+                  active={flags.listener === listener}
+                  onPress={() => settings.set({ listener })}
+                />
+              ))}
+            </View>
           </ControlSection>
 
           <ControlSection title="Sendung">

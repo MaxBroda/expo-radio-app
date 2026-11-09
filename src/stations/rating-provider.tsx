@@ -2,6 +2,7 @@ import { createContext, use, useEffect, useMemo, type PropsWithChildren } from '
 
 import { createDemoRatingSubmission } from '@/adapters/demo-rating-submission';
 import { demoDay, type DemoClock } from '@/demo/demo-clock';
+import type { DemoSettings } from '@/demo/demo-settings';
 import type { FeedbackHub } from '@/ports/feedback-hub';
 import { catalog } from '@/seed/catalog';
 import { ownDemoRatings } from '@/seed/own-ratings';
@@ -16,16 +17,18 @@ const RatingContext = createContext<RatingSubmission | null>(null);
 export function RatingProvider({
   clock,
   feedbackHub,
+  settings,
   children,
-}: PropsWithChildren<{ clock: DemoClock; feedbackHub: FeedbackHub }>) {
+}: PropsWithChildren<{ clock: DemoClock; feedbackHub: FeedbackHub; settings?: DemoSettings }>) {
   const submission = useMemo(
     () =>
       createDemoRatingSubmission(feedbackHub, clock, {
         resetOnStart: true,
         subscribeOnCreate: false,
         seed: (now) => ownDemoRatings(rotation, now),
+        listener: settings ? () => settings.get().listener : undefined,
       }),
-    [clock, feedbackHub],
+    [clock, feedbackHub, settings],
   );
 
   useEffect(() => {

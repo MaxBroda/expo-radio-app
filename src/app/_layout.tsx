@@ -55,7 +55,7 @@ export default function RootLayout() {
     <ThemeProvider>
       <DemoProvider clock={clock} settings={settings}>
         <StationsProvider stations={stations}>
-          <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
+          <RatingProvider clock={clock} feedbackHub={stations.feedbackHub} settings={settings}>
             <RoleProvider>
               <ApplicationNavigator />
             </RoleProvider>
