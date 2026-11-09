@@ -1,4 +1,5 @@
 import { router, type Href } from 'expo-router';
+import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,212 +10,365 @@ import { useDemo, useDemoFlags, useDemoSlot } from '@/demo/demo-provider';
 import type { DemoFlags } from '@/demo/demo-settings';
 import { useRole, type Role } from '@/role/role-provider';
 import { schedule, type Slot } from '@/seed/schedule';
-import { radius, screenPadding, spacing, useTheme } from '@/theme';
+import {
+  radius,
+  screenPadding,
+  spacing,
+  useColorSchemePreference,
+  useTheme,
+  type ColorSchemePreference,
+} from '@/theme';
 
-const roles: { role: Role; title: string; text: string }[] = [
-  { role: 'listener', title: 'Hörer', text: 'Jetzt läuft, Verlauf, Bewerten, Songwunsch.' },
+type RoleChoice = {
+  value: Role;
+  title: string;
+  description: string;
+};
+
+type StateChoice = {
+  label: string;
+  selected: (flags: DemoFlags) => boolean;
+  change: (flags: DemoFlags) => Partial<DemoFlags>;
+};
+
+type ThemeChoice = {
+  value: ColorSchemePreference;
+  label: string;
+};
+
+const roleChoices: readonly RoleChoice[] = [
   {
-    role: 'moderator',
+    value: 'listener',
+    title: 'Hörer',
+    description: 'Jetzt läuft, Verlauf, Bewerten, Songwunsch.',
+  },
+  {
+    value: 'moderator',
     title: 'Moderation',
-    text: 'Überblick, Live-Ticker und Wunschliste im Studio.',
+    description: 'Überblick, Live-Ticker und Wunschliste im Studio.',
   },
 ];
 
-const homes: Record<Role, Href> = { listener: '/', moderator: '/overview' };
-
-type Toggle = {
-  label: string;
-  isOn: (f: DemoFlags) => boolean;
-  toggle: (f: DemoFlags) => Partial<DemoFlags>;
+const roleHomes: Record<Role, Href> = {
+  listener: '/',
+  moderator: '/overview',
 };
 
-const toggles: Toggle[] = [
+const stateChoices: readonly StateChoice[] = [
   {
     label: 'Lädt',
-    isOn: (f) => f.connection === 'loading',
-    toggle: (f) => ({ connection: f.connection === 'loading' ? 'online' : 'loading' }),
+    selected: ({ connection }) => connection === 'loading',
+    change: ({ connection }) => ({ connection: connection === 'loading' ? 'online' : 'loading' }),
   },
   {
     label: 'Keine Verbindung',
-    isOn: (f) => f.connection === 'offline',
-    toggle: (f) => ({ connection: f.connection === 'offline' ? 'online' : 'offline' }),
+    selected: ({ connection }) => connection === 'offline',
+    change: ({ connection }) => ({ connection: connection === 'offline' ? 'online' : 'offline' }),
   },
   {
     label: 'Verlauf leer',
-    isOn: (f) => f.emptyHistory,
-    toggle: (f) => ({ emptyHistory: !f.emptyHistory }),
+    selected: ({ emptyHistory }) => emptyHistory,
+    change: ({ emptyHistory }) => ({ emptyHistory: !emptyHistory }),
   },
   {
     label: 'Senden schlägt fehl',
-    isOn: (f) => f.sendFails,
-    toggle: (f) => ({ sendFails: !f.sendFails }),
+    selected: ({ sendFails }) => sendFails,
+    change: ({ sendFails }) => ({ sendFails: !sendFails }),
   },
   {
     label: 'Bewertungsfenster zu',
-    isOn: (f) => f.ratingWindowClosed,
-    toggle: (f) => ({ ratingWindowClosed: !f.ratingWindowClosed }),
+    selected: ({ ratingWindowClosed }) => ratingWindowClosed,
+    change: ({ ratingWindowClosed }) => ({ ratingWindowClosed: !ratingWindowClosed }),
   },
   {
     label: 'Kontingent erschöpft',
-    isOn: (f) => f.quotaExhausted,
-    toggle: (f) => ({ quotaExhausted: !f.quotaExhausted }),
+    selected: ({ quotaExhausted }) => quotaExhausted,
+    change: ({ quotaExhausted }) => ({ quotaExhausted: !quotaExhausted }),
   },
-  { label: 'Ansturm', isOn: (f) => f.rush, toggle: (f) => ({ rush: !f.rush }) },
+  {
+    label: 'Ansturm',
+    selected: ({ rush }) => rush,
+    change: ({ rush }) => ({ rush: !rush }),
+  },
 ];
 
-const defaultSlot = schedule.slot('feierabend');
+const themeChoices: readonly ThemeChoice[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Hell' },
+  { value: 'dark', label: 'Dunkel' },
+];
 
-function slotLabel(slot: Slot) {
-  return `${String(Math.floor(slot.start / 60)).padStart(2, '0')}:00 ${slot.title}`;
+const initialSlot = schedule.slot('feierabend');
+
+function formatSlot(slot: Slot): string {
+  const hour = Math.floor(slot.start / 60)
+    .toString()
+    .padStart(2, '0');
+  return `${hour}:00 ${slot.title}`;
+}
+
+function stateSummary(count: number): string {
+  if (count === 0) return 'Kein Zustand aktiv — die Screens zeigen den Normalfall.';
+  const noun = count === 1 ? 'Zustand' : 'Zustände';
+  return `${count} ${noun} aktiv — die Screens zeigen jetzt die jeweilige Variante.`;
 }
 
 export default function DemoSheet() {
   const colors = useTheme();
-  const { role: activeRole, setRole } = useRole();
+  const { role, setRole } = useRole();
   const { clock, settings } = useDemo();
   const flags = useDemoFlags();
-  const activeSlot = useDemoSlot();
-  const activeCount = toggles.filter((t) => t.isOn(flags)).length;
+  const currentSlot = useDemoSlot();
+  const { preference, setPreference } = useColorSchemePreference();
+  const selectedStates = stateChoices.reduce(
+    (count, choice) => count + Number(choice.selected(flags)),
+    0,
+  );
 
-  function chooseRole(role: Role) {
-    if (role === activeRole) return router.back();
-    // The role guard removes the screens below the sheet, so going back would find nothing.
-    setRole(role);
-    router.replace(homes[role]);
-  }
+  const selectRole = (nextRole: Role) => {
+    if (nextRole === role) {
+      router.back();
+      return;
+    }
 
-  function resetAll() {
+    setRole(nextRole);
+    router.replace(roleHomes[nextRole]);
+  };
+
+  const resetDemo = () => {
     settings.reset();
-    clock.jumpTo(demoMoment(defaultSlot));
-  }
+    clock.jumpTo(demoMoment(initialSlot));
+  };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.root}>
       <Pressable
-        style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
-        onPress={() => router.back()}
         accessibilityLabel="Demo-Steuerung schließen"
+        onPress={() => router.back()}
+        style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
       />
+
       <SafeAreaView
         edges={['bottom']}
-        style={[styles.sheet, { backgroundColor: colors.surface.default }]}
+        style={[styles.panel, { backgroundColor: colors.surface.default }]}
       >
-        <View style={[styles.handle, { backgroundColor: colors.line.strong }]} />
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.titleRow}>
-            <AppText variant="title" accessibilityRole="header">
+        <View style={[styles.dragHandle, { backgroundColor: colors.line.strong }]} />
+
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <View style={styles.headingRow}>
+            <AppText accessibilityRole="header" variant="title">
               Demo-Steuerung
             </AppText>
             <DemoBadge static />
           </View>
+
           <AppText tone="secondary">
             Gehört nicht zur App. Kein echtes Login — der Schalter zeigt, was die jeweilige Rolle im
             Betrieb sieht.
           </AppText>
 
-          <AppText variant="overline" tone="muted" style={styles.overline}>
-            Rolle
-          </AppText>
-          <View accessibilityRole="radiogroup" style={styles.options}>
-            {roles.map(({ role, title, text }) => {
-              const active = role === activeRole;
-              return (
-                <Tappable
-                  key={role}
-                  onPress={() => chooseRole(role)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: active }}
-                  style={[
-                    styles.option,
-                    active
-                      ? { borderColor: colors.accent.base, backgroundColor: colors.surface.raised }
-                      : {
-                          borderColor: colors.line.default,
-                          backgroundColor: colors.surface.sunken,
-                        },
-                  ]}
-                >
-                  <AppText variant="headline">{title}</AppText>
-                  <AppText tone="secondary">{text}</AppText>
-                </Tappable>
-              );
-            })}
-          </View>
+          <ControlSection title="Rolle">
+            <RoleSelector activeRole={role} onSelect={selectRole} />
+          </ControlSection>
 
-          <AppText variant="overline" tone="muted" style={styles.overline}>
-            Sendung
-          </AppText>
-          <View style={styles.pills}>
-            {schedule.all.map((slot) => (
-              <Pill
-                key={slot.key}
-                label={slotLabel(slot)}
-                size="large"
-                active={slot.key === activeSlot.key}
-                onPress={() => clock.jumpTo(demoMoment(slot))}
-              />
-            ))}
-          </View>
+          <ControlSection title="Sendung">
+            <SlotSelector
+              activeKey={currentSlot.key}
+              onSelect={(slot) => clock.jumpTo(demoMoment(slot))}
+            />
+          </ControlSection>
 
-          <AppText variant="overline" tone="muted" style={styles.overline}>
-            Zustände schalten
-          </AppText>
-          <View style={styles.pills}>
-            {toggles.map((t) => (
-              <Pill
-                key={t.label}
-                label={t.label}
-                size="large"
-                active={t.isOn(flags)}
-                onPress={() => settings.set(t.toggle(flags))}
-              />
-            ))}
-          </View>
-          <AppText variant="caption" tone="muted">
-            {activeCount === 0
-              ? 'Kein Zustand aktiv — die Screens zeigen den Normalfall.'
-              : `${activeCount} ${activeCount === 1 ? 'Zustand' : 'Zustände'} aktiv — die Screens zeigen jetzt die jeweilige Variante.`}
-          </AppText>
+          <ControlSection title="Zustände schalten">
+            <StateSelector
+              flags={flags}
+              onToggle={(choice) => settings.set(choice.change(flags))}
+            />
+            <AppText variant="caption" tone="muted">
+              {stateSummary(selectedStates)}
+            </AppText>
+          </ControlSection>
 
-          <AppButton
-            label="Components"
-            variant="secondary"
-            size="compact"
-            onPress={() => router.replace('/components')}
-            style={styles.components}
-          />
+          <ControlSection title="Theme">
+            <ThemeSelector
+              value={preference}
+              onSelect={(nextPreference) => setPreference(nextPreference)}
+            />
+          </ControlSection>
         </ScrollView>
-        <View style={styles.actions}>
+
+        <View style={styles.footer}>
           <AppButton
             label="Alles zurücksetzen"
             variant="secondary"
-            onPress={resetAll}
-            style={styles.flex}
+            onPress={resetDemo}
+            style={styles.footerButton}
           />
-          <AppButton label="Schließen" onPress={router.back} style={styles.flex} />
+          <AppButton label="Schließen" onPress={router.back} style={styles.footerButton} />
         </View>
       </SafeAreaView>
     </View>
   );
 }
 
+function ControlSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <AppText variant="overline" tone="muted">
+        {title}
+      </AppText>
+      {children}
+    </View>
+  );
+}
+
+function RoleSelector({
+  activeRole,
+  onSelect,
+}: {
+  activeRole: Role;
+  onSelect: (role: Role) => void;
+}) {
+  const colors = useTheme();
+
+  return (
+    <View accessibilityRole="radiogroup" style={styles.roleList}>
+      {roleChoices.map((choice) => {
+        const selected = choice.value === activeRole;
+        const surface = selected ? colors.surface.raised : colors.surface.sunken;
+        const border = selected ? colors.accent.base : colors.line.default;
+
+        return (
+          <Tappable
+            key={choice.value}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: selected }}
+            onPress={() => onSelect(choice.value)}
+            style={[styles.roleCard, { backgroundColor: surface, borderColor: border }]}
+          >
+            <AppText variant="headline">{choice.title}</AppText>
+            <AppText tone="secondary">{choice.description}</AppText>
+          </Tappable>
+        );
+      })}
+    </View>
+  );
+}
+
+function SlotSelector({
+  activeKey,
+  onSelect,
+}: {
+  activeKey: Slot['key'];
+  onSelect: (slot: Slot) => void;
+}) {
+  return (
+    <View style={styles.pillRow}>
+      {schedule.all.map((slot) => (
+        <Pill
+          key={slot.key}
+          label={formatSlot(slot)}
+          size="large"
+          active={slot.key === activeKey}
+          onPress={() => onSelect(slot)}
+        />
+      ))}
+    </View>
+  );
+}
+
+function StateSelector({
+  flags,
+  onToggle,
+}: {
+  flags: DemoFlags;
+  onToggle: (choice: StateChoice) => void;
+}) {
+  return (
+    <View style={styles.pillRow}>
+      {stateChoices.map((choice) => (
+        <Pill
+          key={choice.label}
+          label={choice.label}
+          size="large"
+          active={choice.selected(flags)}
+          onPress={() => onToggle(choice)}
+        />
+      ))}
+    </View>
+  );
+}
+
+function ThemeSelector({
+  value,
+  onSelect,
+}: {
+  value: ColorSchemePreference;
+  onSelect: (value: ColorSchemePreference) => void;
+}) {
+  return (
+    <View style={styles.pillRow}>
+      {themeChoices.map((choice) => (
+        <Pill
+          key={choice.value}
+          label={choice.label}
+          size="large"
+          active={choice.value === value}
+          onPress={() => onSelect(choice.value)}
+        />
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'flex-end' },
-  sheet: {
+  root: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  panel: {
     maxHeight: '90%',
     gap: spacing.md,
     padding: screenPadding.listener,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
   },
-  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  overline: { marginTop: spacing.sm },
-  content: { gap: spacing.md },
-  options: { gap: spacing.md },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  components: { alignSelf: 'flex-start', marginTop: spacing.sm },
-  option: { gap: spacing.xs, padding: spacing.xl, borderWidth: 1, borderRadius: radius.lg },
-  actions: { flexDirection: 'row', gap: spacing.md },
-  flex: { flex: 1 },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    alignSelf: 'center',
+    borderRadius: 2,
+  },
+  body: {
+    gap: spacing.md,
+  },
+  headingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  section: {
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  roleList: {
+    gap: spacing.md,
+  },
+  roleCard: {
+    gap: spacing.xs,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  footer: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  footerButton: {
+    flex: 1,
+  },
 });
