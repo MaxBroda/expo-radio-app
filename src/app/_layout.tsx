@@ -114,7 +114,6 @@ function ApplicationNavigator() {
             contentStyle: { backgroundColor: 'transparent' },
           }}
         />
-        <Stack.Screen name="components" />
       </Stack>
     </NavigationThemeProvider>
   );
