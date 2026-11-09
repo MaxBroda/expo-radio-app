@@ -1,70 +1,90 @@
 import type { Connection } from '@/demo/demo-settings';
 import { StationUnavailableError } from '@/domain/errors';
-import type { TrackId } from '@/domain/track';
+import type { Track, TrackId } from '@/domain/track';
 
 import { searchLimits, StubMusicDatabase } from './stub-music-database';
 
-function database(connection: Connection = 'online') {
-  return new StubMusicDatabase({ delayMs: 0, connection: () => connection });
+function createDatabase(connection: Connection = 'online') {
+  return new StubMusicDatabase({
+    delayMs: 0,
+    connection: () => connection,
+  });
 }
 
-const titles = (tracks: { title: string }[]) => tracks.map((t) => t.title);
+const trackTitles = (tracks: Track[]) => tracks.map(({ title }) => title);
 
-test('finds tracks by title or artist, ignoring case', async () => {
-  expect(titles(await database().search('GRÖNEMEYER'))).toEqual(['Männer', 'Mensch']);
-});
+describe('StubMusicDatabase', () => {
+  it('searches title and artist without considering letter case', async () => {
+    const result = await createDatabase().search('GRÖNEMEYER');
 
-test.each([
-  ['gronemeyer', 'Männer'],
-  ['barfuss', 'Barfuß am Klavier'],
-  ['jose gonzalez', 'Heartbeats'],
-])('ignores accents and umlauts: %s', async (query, title) => {
-  expect(titles(await database().search(query))).toContain(title);
-});
-
-test('every word has to match', async () => {
-  expect(titles(await database().search('herbert männer'))).toEqual(['Männer']);
-});
-
-test('titles starting with the query come first', async () => {
-  expect(titles(await database().search('night'))).toEqual(['Nightcall', 'Midnight City']);
-});
-
-test('queries below the minimum length return nothing', async () => {
-  expect(await database().search('a')).toEqual([]);
-  expect(await database().search('  ')).toEqual([]);
-});
-
-test('results are limited', async () => {
-  expect(await database().search('an')).toHaveLength(searchLimits.maxResults);
-});
-
-test('an unknown song returns no hits, which leads to a free text wish', async () => {
-  expect(await database().search('pfeifen am anfang')).toEqual([]);
-});
-
-test('lookup returns the track without seed fields', async () => {
-  const track = await database().lookup('t_0038' as TrackId);
-
-  expect(track).toEqual({
-    id: 't_0038',
-    title: 'Mensch',
-    artist: 'Herbert Grönemeyer',
-    album: expect.any(String),
-    year: expect.any(Number),
-    durationSec: expect.any(Number),
+    expect(trackTitles(result)).toEqual(['Männer', 'Mensch']);
   });
-});
 
-test('lookup of an unknown id returns undefined', async () => {
-  expect(await database().lookup('t_9999' as TrackId)).toBeUndefined();
-});
+  it.each([
+    ['gronemeyer', 'Männer'],
+    ['barfuss', 'Barfuß am Klavier'],
+    ['jose gonzalez', 'Heartbeats'],
+  ])(
+    'normalizes accents and special German characters in %s',
+    async (query: string, expectedTitle: string) => {
+      const titles = trackTitles(await createDatabase().search(query));
 
-test('without connection both operations fail', async () => {
-  await expect(database('offline').search('mensch')).rejects.toBeInstanceOf(
-    StationUnavailableError,
+      expect(titles).toContain(expectedTitle);
+    },
   );
-  await expect(database('offline').lookup('t_0038' as TrackId)).rejects.toBeInstanceOf(
-    StationUnavailableError,
+
+  it('requires every search term to occur', async () => {
+    const result = await createDatabase().search('herbert männer');
+
+    expect(trackTitles(result)).toEqual(['Männer']);
+  });
+
+  it('ranks titles beginning with the complete query first', async () => {
+    const result = await createDatabase().search('night');
+
+    expect(trackTitles(result)).toEqual(['Nightcall', 'Midnight City']);
+  });
+
+  it.each(['a', '  '])(
+    'returns no result for a query below the minimum: %j',
+    async (query: string) => {
+      await expect(createDatabase().search(query)).resolves.toEqual([]);
+    },
   );
+
+  it('caps the number of returned tracks', async () => {
+    const result = await createDatabase().search('an');
+
+    expect(result).toHaveLength(searchLimits.maxResults);
+  });
+
+  it('returns no track for an unknown description', async () => {
+    await expect(createDatabase().search('pfeifen am anfang')).resolves.toEqual([]);
+  });
+
+  it('looks up a public track without catalog-only fields', async () => {
+    const result = await createDatabase().lookup('t_0038' as TrackId);
+
+    expect(result).toEqual({
+      id: 't_0038',
+      title: 'Mensch',
+      artist: 'Herbert Grönemeyer',
+      album: expect.any(String),
+      year: expect.any(Number),
+      durationSec: expect.any(Number),
+    });
+  });
+
+  it('returns undefined when a track id is unknown', async () => {
+    await expect(createDatabase().lookup('t_9999' as TrackId)).resolves.toBeUndefined();
+  });
+
+  it('rejects search and lookup while offline', async () => {
+    const database = createDatabase('offline');
+
+    await expect(database.search('mensch')).rejects.toBeInstanceOf(StationUnavailableError);
+    await expect(database.lookup('t_0038' as TrackId)).rejects.toBeInstanceOf(
+      StationUnavailableError,
+    );
+  });
 });
