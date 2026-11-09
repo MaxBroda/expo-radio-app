@@ -6,32 +6,53 @@ import { radius, spacing, useTheme } from '@/theme';
 
 import { quotaLine } from './wish-format';
 
-export function QuotaMeter({ quota }: { quota: WishQuota }) {
+type Props = {
+  quota: WishQuota;
+};
+
+export function QuotaMeter({ quota }: Props) {
   const colors = useTheme();
+  const label = quotaLine(quota);
+  const segments = Array.from({ length: quota.limit }, (_, index) => {
+    const available = index < quota.remaining;
+
+    return (
+      <View
+        key={index}
+        style={[
+          styles.segment,
+          { backgroundColor: available ? colors.accent.base : colors.line.strong },
+        ]}
+      />
+    );
+  });
 
   return (
-    <View style={styles.row} accessible accessibilityLabel={quotaLine(quota)}>
-      <View style={styles.segments}>
-        {Array.from({ length: quota.limit }, (_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.segment,
-              { backgroundColor: i < quota.remaining ? colors.accent.base : colors.line.strong },
-            ]}
-          />
-        ))}
-      </View>
-      <AppText variant="caption" tone="secondary" numberOfLines={1} style={styles.text}>
-        {quotaLine(quota)}
+    <View style={styles.container} accessible accessibilityLabel={label}>
+      <View style={styles.segments}>{segments}</View>
+      <AppText variant="caption" tone="secondary" numberOfLines={1} style={styles.label}>
+        {label}
       </AppText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  segments: { flexDirection: 'row', gap: spacing.xs },
-  segment: { width: 18, height: 4, borderRadius: radius.pill },
-  text: { flex: 1 },
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  segments: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  segment: {
+    width: 18,
+    height: 4,
+    borderRadius: radius.pill,
+  },
+  label: {
+    flex: 1,
+  },
 });

@@ -15,27 +15,41 @@ import { DemoProvider } from '@/demo/demo-provider';
 import { DemoSettings } from '@/demo/demo-settings';
 import { RoleProvider, useRole } from '@/role/role-provider';
 import { schedule } from '@/seed/schedule';
-import { createStubStations } from '@/stations/stations';
 import { RatingProvider } from '@/stations/rating-provider';
+import { createStubStations } from '@/stations/stations';
 import { StationsProvider } from '@/stations/stations-provider';
 import { fontAssets, ThemeProvider, useColorSchemePreference, useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
-  const [clock] = useState(() => new DemoClock(demoMoment(schedule.slot('feierabend'))));
-  const [settings] = useState(() => new DemoSettings());
-  const [stations] = useState(() =>
-    createStubStations({ now: () => clock.now(), flags: () => settings.get() }, clock),
+function createRuntime() {
+  const clock = new DemoClock(demoMoment(schedule.slot('feierabend')));
+  const settings = new DemoSettings();
+  const stations = createStubStations(
+    {
+      now: () => clock.now(),
+      flags: () => settings.get(),
+    },
+    clock,
   );
+
+  return { clock, settings, stations };
+}
+
+export default function RootLayout() {
+  const [{ clock, settings, stations }] = useState(createRuntime);
   const [fontsLoaded, fontError] = useFonts(fontAssets);
-  const ready = fontsLoaded || fontError !== null;
+  const canRender = fontsLoaded || fontError !== null;
 
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync();
-  }, [ready]);
+    if (canRender) {
+      SplashScreen.hideAsync();
+    }
+  }, [canRender]);
 
-  if (!ready) return null;
+  if (!canRender) {
+    return null;
+  }
 
   return (
     <ThemeProvider>
@@ -43,7 +57,7 @@ export default function RootLayout() {
         <StationsProvider stations={stations}>
           <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
             <RoleProvider>
-              <ThemedNavigation />
+              <ApplicationNavigator />
             </RoleProvider>
           </RatingProvider>
         </StationsProvider>
@@ -52,35 +66,36 @@ export default function RootLayout() {
   );
 }
 
-/** Everything behind the screens must use the theme too, or it shows through during swipe-back. */
-function ThemedNavigation() {
+function ApplicationNavigator() {
   const colors = useTheme();
   const { scheme } = useColorSchemePreference();
   const { role } = useRole();
-  const base = scheme === 'light' ? DefaultTheme : DarkTheme;
+  const navigationBase = scheme === 'light' ? DefaultTheme : DarkTheme;
+  const navigationTheme = {
+    ...navigationBase,
+    colors: {
+      ...navigationBase.colors,
+      primary: colors.accent.base,
+      background: colors.bg.base,
+      card: colors.surface.default,
+      text: colors.text.default,
+      border: colors.line.default,
+      notification: colors.accent.base,
+    },
+  };
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg.base);
   }, [colors]);
 
   return (
-    <NavigationThemeProvider
-      value={{
-        ...base,
-        colors: {
-          ...base.colors,
-          primary: colors.accent.base,
-          background: colors.bg.base,
-          card: colors.surface.default,
-          text: colors.text.default,
-          border: colors.line.default,
-          notification: colors.accent.base,
-        },
-      }}
-    >
+    <NavigationThemeProvider value={navigationTheme}>
       <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
       <Stack
-        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg.base } }}
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.bg.base },
+        }}
       >
         <Stack.Protected guard={role === 'listener'}>
           <Stack.Screen name="(listener)" />

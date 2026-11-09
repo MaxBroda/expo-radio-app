@@ -3,26 +3,31 @@ import type { WishQuota } from '@/domain/wish-quota';
 import { wishLimits, type WishProblem } from '@/domain/wish-validation';
 
 export function clockTime(date: Date): string {
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
-}
-
-export function trackLine(track: Track, votes?: number): string {
-  const parts = [track.artist, track.album, track.year?.toString()];
-  if (votes !== undefined) parts.push(votesLabel(votes));
-  return parts.filter(Boolean).join(' · ');
+  const hour = date.getHours().toString().padStart(2, '0');
+  const minute = date.getMinutes().toString().padStart(2, '0');
+  return `${hour}:${minute}`;
 }
 
 export function votesLabel(votes: number): string {
   return votes === 1 ? '1 Stimme' : `${votes} Stimmen`;
 }
 
+export function trackLine(track: Track, votes?: number): string {
+  const values: (string | undefined)[] = [track.artist, track.album, track.year?.toString()];
+
+  if (votes !== undefined) {
+    values.push(votesLabel(votes));
+  }
+
+  return values.filter(Boolean).join(' · ');
+}
+
 export function quotaLine(quota: WishQuota): string {
-  const free = quota.exhausted
+  const availability = quota.exhausted
     ? `0 von ${quota.limit} Wünschen frei`
     : `Noch ${quota.remaining} von ${quota.limit} Wünschen frei`;
-  return `${free} · zurückgesetzt ${clockTime(quota.resetsAt)}`;
+
+  return `${availability} · zurückgesetzt ${clockTime(quota.resetsAt)}`;
 }
 
 export const problemText: Record<WishProblem, string> = {

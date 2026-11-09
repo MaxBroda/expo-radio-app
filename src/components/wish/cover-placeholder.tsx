@@ -2,39 +2,56 @@ import { StyleSheet, View } from 'react-native';
 
 import { radius, useTheme, type Colors } from '@/theme';
 
-const tints = (colors: Colors) => [colors.accent.base, colors.data.base, colors.critical.base];
+const defaultCoverSize = 48;
 
-function hash(text: string): number {
-  let value = 0;
-  for (const char of text) value = (value * 31 + char.charCodeAt(0)) | 0;
-  return Math.abs(value);
+function paletteFrom(colors: Colors) {
+  return [colors.accent.base, colors.data.base, colors.critical.base];
 }
 
-/** Generated stand-in, original artwork is protected (ADR 0003). The seed picks the tint. */
-export function CoverPlaceholder({ seed, size = 48 }: { seed: string; size?: number }) {
+function seedValue(seed: string): number {
+  let result = 0;
+
+  for (const character of seed) {
+    result = (result * 31 + character.charCodeAt(0)) | 0;
+  }
+
+  return Math.abs(result);
+}
+
+export function CoverPlaceholder({
+  seed,
+  size = defaultCoverSize,
+}: {
+  seed: string;
+  size?: number;
+}) {
   const colors = useTheme();
-  const palette = tints(colors);
-  const tint = palette[hash(seed) % palette.length];
+  const palette = paletteFrom(colors);
+  const background = palette[seedValue(seed) % palette.length];
 
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={[
-        styles.cover,
-        { width: size, height: size, borderRadius: size > 96 ? radius.lg : radius.thumb },
-        { backgroundColor: colors.surface.raised },
+        styles.container,
+        {
+          width: size,
+          height: size,
+          borderRadius: size > 96 ? radius.lg : radius.thumb,
+          backgroundColor: colors.surface.raised,
+        },
       ]}
     >
       <View
         style={[
-          styles.shape,
+          styles.decoration,
           {
             width: size * 0.7,
             height: size * 0.55,
             borderTopLeftRadius: size * 0.55,
             borderTopRightRadius: size * 0.55,
-            backgroundColor: tint,
+            backgroundColor: background,
           },
         ]}
       />
@@ -43,6 +60,12 @@ export function CoverPlaceholder({ seed, size = 48 }: { seed: string; size?: num
 }
 
 const styles = StyleSheet.create({
-  cover: { overflow: 'hidden' },
-  shape: { position: 'absolute', left: 0, bottom: 0 },
+  container: {
+    overflow: 'hidden',
+  },
+  decoration: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+  },
 });

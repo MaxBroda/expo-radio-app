@@ -10,48 +10,47 @@ type Props = {
   selected: boolean;
   onPress: () => void;
   leading?: ReactNode;
-  /** Small line above the title, used for the free text card. */
   eyebrow?: string;
 };
 
-export function WishOption({ title, subtitle, selected, onPress, leading, eyebrow }: Props) {
+export function WishOption(props: Props) {
+  const { title, subtitle, selected, onPress, leading, eyebrow } = props;
   const colors = useTheme();
+  const accessibilityLabel = [eyebrow, title, subtitle].filter(Boolean).join(', ');
+  const selectionStyle = selected
+    ? { borderColor: colors.accent.base, backgroundColor: colors.surface.raised }
+    : { borderColor: colors.line.default, backgroundColor: colors.surface.default };
 
   return (
     <Tappable
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
-      accessibilityLabel={[eyebrow, title, subtitle].filter(Boolean).join(', ')}
-      style={[
-        styles.card,
-        selected
-          ? { borderColor: colors.accent.base, backgroundColor: colors.surface.raised }
-          : { borderColor: colors.line.default, backgroundColor: colors.surface.default },
-      ]}
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.option, selectionStyle]}
     >
       {leading}
-      <View style={styles.text}>
-        {eyebrow && (
+      <View style={styles.content}>
+        {eyebrow ? (
           <AppText variant="label" tone="muted">
             {eyebrow}
           </AppText>
-        )}
+        ) : null}
         <AppText variant="headline" numberOfLines={1}>
           {title}
         </AppText>
-        {subtitle.length > 0 && (
+        {subtitle.length > 0 ? (
           <AppText tone="secondary" numberOfLines={2}>
             {subtitle}
           </AppText>
-        )}
+        ) : null}
       </View>
     </Tappable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  option: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -60,5 +59,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     overflow: 'hidden',
   },
-  text: { flex: 1, gap: 2 },
+  content: {
+    flex: 1,
+    gap: 2,
+  },
 });
