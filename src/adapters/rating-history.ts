@@ -1,11 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import type { DemoListener } from '@/demo/demo-settings';
 import type { RatingSubject, Score } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
 
-export type HistoryScope = 'device' | 'demo';
+export type HistoryScope = 'device' | 'demo' | { listener: DemoListener };
 
 function prefixFor(scope: HistoryScope): string {
+  if (typeof scope === 'object') return `rating:demo:${scope.listener}:`;
   return scope === 'demo' ? 'rating:demo:' : 'rating:';
 }
 

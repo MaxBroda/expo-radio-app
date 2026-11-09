@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen, userEvent } from '@testing-library/reac
 
 import RateTrackScreen from '@/app/rate/track';
 import { DemoClock } from '@/demo/demo-clock';
+import { DemoProvider } from '@/demo/demo-provider';
+import { DemoSettings } from '@/demo/demo-settings';
 import { AlreadyRatedError } from '@/domain/errors';
 import type { NowPlaying } from '@/domain/now-playing';
 import type { Rating, RatingId, RatingInput } from '@/domain/rating';
@@ -36,14 +38,18 @@ function savedRating(input: RatingInput): Rating {
 
 async function renderTrack(result: () => Promise<NowPlaying>) {
   const stations = createStubStations();
+  const clock = new DemoClock(startedAt);
+  const settings = new DemoSettings();
   stations.playout.getNowPlaying = jest.fn(result);
   stations.feedbackHub.submitRating = jest.fn(async (input) => savedRating(input));
   await renderWithTheme(
-    <StationsProvider stations={stations}>
-      <RatingProvider clock={new DemoClock(startedAt)} feedbackHub={stations.feedbackHub}>
-        <RateTrackScreen />
-      </RatingProvider>
-    </StationsProvider>,
+    <DemoProvider clock={clock} settings={settings}>
+      <StationsProvider stations={stations}>
+        <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
+          <RateTrackScreen />
+        </RatingProvider>
+      </StationsProvider>
+    </DemoProvider>,
   );
   return stations;
 }
@@ -209,13 +215,16 @@ test('blocks a second rating when the screen is opened again', async () => {
   stations.playout.getNowPlaying = jest.fn(async () => playing);
   stations.feedbackHub.submitRating = jest.fn(async (input) => savedRating(input));
   const clock = new DemoClock(startedAt);
+  const settings = new DemoSettings();
   const view = (key: string) => (
     <ThemeProvider initialPreference="dark">
-      <StationsProvider stations={stations}>
-        <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
-          <RateTrackScreen key={key} />
-        </RatingProvider>
-      </StationsProvider>
+      <DemoProvider clock={clock} settings={settings}>
+        <StationsProvider stations={stations}>
+          <RatingProvider clock={clock} feedbackHub={stations.feedbackHub}>
+            <RateTrackScreen key={key} />
+          </RatingProvider>
+        </StationsProvider>
+      </DemoProvider>
     </ThemeProvider>
   );
   const screenView = await render(view('first'));
@@ -233,6 +242,34 @@ test('blocks a second rating when the screen is opened again', async () => {
   ).toBeOnTheScreen();
   expect(screen.queryByRole('radio')).not.toBeOnTheScreen();
   expect(stations.feedbackHub.submitRating).toHaveBeenCalledTimes(1);
+});
+
+test('switching listeners reloads the screen with their own rating', async () => {
+  const stations = createStubStations();
+  stations.playout.getNowPlaying = jest.fn(async () => playing);
+  stations.feedbackHub.submitRating = jest.fn(async (input) => savedRating(input));
+  const clock = new DemoClock(startedAt);
+  const settings = new DemoSettings();
+  await renderWithTheme(
+    <DemoProvider clock={clock} settings={settings}>
+      <StationsProvider stations={stations}>
+        <RatingProvider clock={clock} feedbackHub={stations.feedbackHub} settings={settings}>
+          <RateTrackScreen />
+        </RatingProvider>
+      </StationsProvider>
+    </DemoProvider>,
+  );
+
+  await screen.findByText('Nordlicht');
+  await userEvent.press(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' }));
+  await userEvent.press(screen.getByRole('button', { name: 'Bewertung absenden' }));
+  await screen.findByText('Danke, ist angekommen');
+
+  await act(() => settings.set({ listener: 2 }));
+  expect(await screen.findByText('Nordlicht')).toBeOnTheScreen();
+  expect(screen.getByRole('radio', { name: '4 von 5 Sternen: gut' })).toBeOnTheScreen();
+  await act(() => settings.set({ listener: 1 }));
+  expect(await screen.findByText('Schon bewertet')).toBeOnTheScreen();
 });
 
 test('retries local saving without sending the rating again', async () => {

@@ -1,8 +1,10 @@
 import type { Unsubscribe } from '@/ports/notification-service';
 
 export type Connection = 'online' | 'loading' | 'offline';
+export type DemoListener = 1 | 2 | 3;
 
 export type DemoFlags = {
+  listener: DemoListener;
   connection: Connection;
   emptyHistory: boolean;
   sendFails: boolean;
@@ -12,6 +14,7 @@ export type DemoFlags = {
 };
 
 export const defaultFlags: DemoFlags = {
+  listener: 1,
   connection: 'online',
   emptyHistory: false,
   sendFails: false,

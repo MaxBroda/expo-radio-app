@@ -1,4 +1,5 @@
 import type { DemoClock } from '@/demo/demo-clock';
+import type { DemoListener } from '@/demo/demo-settings';
 import type { RatingSubject, Score } from '@/domain/rating';
 import type { FeedbackHub } from '@/ports/feedback-hub';
 import type { OwnRating } from '@/seed/own-ratings';
@@ -19,14 +20,26 @@ type Options = {
   subscribeOnCreate?: boolean;
   /** Written after every reset, so the demo starts with ratings of its own. */
   seed?: (now: Date) => OwnRating[];
+  listener?: () => DemoListener;
 };
 
 export function createDemoRatingSubmission(
   feedbackHub: FeedbackHub,
   clock: DemoClock,
-  { resetOnStart = false, subscribeOnCreate = true, seed = () => [] }: Options = {},
+  { resetOnStart = false, subscribeOnCreate = true, seed = () => [], listener }: Options = {},
 ) {
-  let flow = createRatingSubmission(feedbackHub, 'demo');
+  const flows = new Map<DemoListener | 'demo', ReturnType<typeof createRatingSubmission>>();
+  const currentListener = () => listener?.() ?? 'demo';
+  const scopeFor = (selected: DemoListener | 'demo') =>
+    selected === 'demo' ? 'demo' : ({ listener: selected } as const);
+  function flowFor(selected: DemoListener | 'demo') {
+    let flow = flows.get(selected);
+    if (!flow) {
+      flow = createRatingSubmission(feedbackHub, scopeFor(selected));
+      flows.set(selected, flow);
+    }
+    return flow;
+  }
   let revision = 0;
   let clearedRevision = resetOnStart ? -1 : 0;
   let busy = false;
@@ -51,30 +64,32 @@ export function createDemoRatingSubmission(
       const currentRevision = revision;
       await clearDemoRatingHistory();
       for (const { subject, score } of seed(clock.now()))
-        await rememberRatingOnDevice(subject, score, 'demo');
-      flow = createRatingSubmission(feedbackHub, 'demo');
+        await rememberRatingOnDevice(subject, score, scopeFor(listener ? 1 : 'demo'));
+      flows.clear();
       clearedRevision = currentRevision;
     }
   }
 
   async function submit(target: RatingTarget, score: Score, comment?: string) {
     if (busy) return { status: 'busy' } as const;
+    const selected = currentListener();
     busy = true;
     try {
       await clearIfNeeded();
       const started = revision;
       try {
-        const result = await flow.submit(
+        const result = await flowFor(selected).submit(
           target,
           score,
           comment,
           () => clock.now(),
-          () => started === revision,
+          () => started === revision && selected === currentListener(),
         );
         if (started !== revision) {
           await clearIfNeeded();
           return { status: 'demoChanged' } as const;
         }
+        if (selected !== currentListener()) return { status: 'demoChanged' } as const;
         return result;
       } catch (error) {
         if (started !== revision) await clearIfNeeded();
@@ -87,16 +102,17 @@ export function createDemoRatingSubmission(
 
   async function retryLocalSave(): Promise<boolean> {
     if (busy) return false;
+    const selected = currentListener();
     busy = true;
     try {
       await clearIfNeeded();
       const started = revision;
-      const saved = await flow.retryLocalSave();
+      const saved = await flowFor(selected).retryLocalSave();
       if (started !== revision) {
         await clearIfNeeded();
         return false;
       }
-      return saved;
+      return selected === currentListener() && saved;
     } finally {
       busy = false;
     }
@@ -104,12 +120,12 @@ export function createDemoRatingSubmission(
 
   async function ratedScore(subject: RatingSubject): Promise<Score | undefined> {
     if (!busy) await clearIfNeeded();
-    return ratedScoreOnDevice(subject, 'demo');
+    return ratedScoreOnDevice(subject, scopeFor(currentListener()));
   }
 
   async function trackScores() {
     if (!busy) await clearIfNeeded();
-    return trackScoresOnDevice('demo');
+    return trackScoresOnDevice(scopeFor(currentListener()));
   }
 
   return { submit, retryLocalSave, ratedScore, trackScores, start, dispose };

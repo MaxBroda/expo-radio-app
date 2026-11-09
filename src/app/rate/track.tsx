@@ -9,6 +9,7 @@ import { ModalHeader } from '@/components/modal-header';
 import { RatingStars } from '@/components/rating-stars';
 import { AppButton, AppText, Card, Pill, StatusBanner, TextField } from '@/components/ui';
 import { CoverPlaceholder } from '@/components/wish/cover-placeholder';
+import { useDemoFlags } from '@/demo/demo-provider';
 import { AlreadyRatedError } from '@/domain/errors';
 import {
   ratingCommentMaxLength as maxCommentLength,
@@ -40,6 +41,11 @@ async function findTarget(
 const coverSize = touchTarget + spacing.md;
 
 export default function RateTrackScreen() {
+  const { listener } = useDemoFlags();
+  return <RateTrackForm key={listener} />;
+}
+
+function RateTrackForm() {
   const colors = useTheme();
   const { playout } = useStations();
   const ratingSubmission = useRatingSubmission();

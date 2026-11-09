@@ -19,6 +19,11 @@ import { useRatingSubmission } from '@/stations/rating-provider';
 import { radius, screenPadding, spacing, touchTarget, useTheme } from '@/theme';
 
 export default function RateShowScreen() {
+  const { listener } = useDemoFlags();
+  return <RateShowForm key={listener} />;
+}
+
+function RateShowForm() {
   const { playout } = useStations();
   const ratingSubmission = useRatingSubmission();
   const { ratingWindowClosed } = useDemoFlags();

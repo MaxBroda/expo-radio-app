@@ -85,3 +85,36 @@ test('lists the scores of rated tracks in one scope only', async () => {
     ]),
   );
 });
+
+test('keeps each demo listener’s track and show ratings separate', async () => {
+  const track = { kind: 'track', trackId: 'track-1' as TrackId } as const;
+  const show = { kind: 'show', showId: 'show-1' as ShowId } as const;
+  const first = { listener: 1 } as const;
+  const second = { listener: 2 } as const;
+
+  await rememberRatingOnDevice(track, 4, first);
+  await rememberRatingOnDevice(show, 5, first);
+  expect(await hasRatedOnDevice(track, second)).toBe(false);
+  expect(await hasRatedOnDevice(show, second)).toBe(false);
+
+  await rememberRatingOnDevice(track, 2, second);
+  expect(await ratedScoreOnDevice(track, first)).toBe(4);
+  expect(await ratedScoreOnDevice(track, second)).toBe(2);
+  expect(await trackScoresOnDevice(first)).toEqual(new Map([['track-1', 4]]));
+  expect(await trackScoresOnDevice(second)).toEqual(new Map([['track-1', 2]]));
+});
+
+test('clearing demo history removes every listener’s ratings and preserves device ratings', async () => {
+  const track = { kind: 'track', trackId: 'track-1' as TrackId } as const;
+  await rememberRatingOnDevice(track, 5);
+  await rememberRatingOnDevice(track, 4, { listener: 1 });
+  await rememberRatingOnDevice(track, 2, { listener: 2 });
+  await rememberRatingOnDevice(track, 3, 'demo');
+
+  await clearDemoRatingHistory();
+
+  expect(await ratedScoreOnDevice(track)).toBe(5);
+  expect(await hasRatedOnDevice(track, { listener: 1 })).toBe(false);
+  expect(await hasRatedOnDevice(track, { listener: 2 })).toBe(false);
+  expect(await hasRatedOnDevice(track, 'demo')).toBe(false);
+});

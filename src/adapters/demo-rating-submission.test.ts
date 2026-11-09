@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { DemoClock } from '@/demo/demo-clock';
+import { DemoSettings } from '@/demo/demo-settings';
 import type { Rating, RatingInput } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
 
@@ -172,5 +173,62 @@ test('writes the seeded ratings on start and again after a clock jump', async ()
 
   clock.jumpTo(now);
   expect(await flow.trackScores()).toEqual(new Map([['track-9', 2]]));
+  flow.dispose();
+});
+
+test('keeps ratings per listener and seeds only the first after a clock jump', async () => {
+  const clock = new DemoClock(now, () => 0);
+  const settings = new DemoSettings();
+  const seeded = { kind: 'track', trackId: 'track-9' as TrackId } as const;
+  const send = jest.fn(async (input: RatingInput) => rating(input));
+  const flow = createDemoRatingSubmission({ submitRating: send, list: jest.fn() }, clock, {
+    resetOnStart: true,
+    listener: () => settings.get().listener,
+    seed: () => [{ subject: seeded, score: 2 }],
+  });
+
+  expect(await flow.ratedScore(seeded)).toBe(2);
+  expect(await flow.submit(track, 4)).toMatchObject({ status: 'sent' });
+  settings.set({ listener: 2 });
+  expect(await flow.ratedScore(seeded)).toBeUndefined();
+  expect(await flow.ratedScore(track)).toBeUndefined();
+  expect(await flow.submit(track, 3)).toMatchObject({ status: 'sent' });
+  settings.set({ listener: 1 });
+  expect(await flow.ratedScore(track)).toBe(4);
+  clock.jumpTo(now);
+  expect(await flow.ratedScore(track)).toBeUndefined();
+  expect(await flow.ratedScore(seeded)).toBe(2);
+  settings.set({ listener: 2 });
+  expect(await flow.ratedScore(track)).toBeUndefined();
+  expect(await flow.ratedScore(seeded)).toBeUndefined();
+  expect(send).toHaveBeenCalledTimes(2);
+  flow.dispose();
+});
+
+test('a listener change while sending keeps the rating with its original listener', async () => {
+  const clock = new DemoClock(now, () => 0);
+  const settings = new DemoSettings();
+  let finish!: (value: Rating) => void;
+  let signal!: () => void;
+  const started = new Promise<void>((resolve) => (signal = resolve));
+  const send = jest.fn(
+    () =>
+      new Promise<Rating>((resolve) => {
+        finish = resolve;
+        signal();
+      }),
+  );
+  const flow = createDemoRatingSubmission({ submitRating: send, list: jest.fn() }, clock, {
+    listener: () => settings.get().listener,
+  });
+
+  const pending = flow.submit(track, 4);
+  await started;
+  settings.set({ listener: 2 });
+  finish(rating({ subject: track, score: 4 }));
+  expect(await pending).toEqual({ status: 'demoChanged' });
+  expect(await flow.ratedScore(track)).toBeUndefined();
+  settings.set({ listener: 1 });
+  expect(await flow.ratedScore(track)).toBe(4);
   flow.dispose();
 });
