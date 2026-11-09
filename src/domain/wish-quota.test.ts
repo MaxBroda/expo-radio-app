@@ -1,44 +1,45 @@
 import { wishesPerHour, wishQuota } from './wish-quota';
 
-const at = (hours: number, minutes: number) => new Date(2026, 9, 15, hours, minutes);
+const dateAt = (hour: number, minute: number) => new Date(2026, 9, 15, hour, minute);
 
-test('without wishes the full quota is free until the next full hour', () => {
-  expect(wishQuota([], at(18, 42))).toEqual({
-    limit: wishesPerHour,
-    used: 0,
-    remaining: 3,
-    exhausted: false,
-    resetsAt: at(19, 0),
+describe('wishQuota', () => {
+  it('keeps the complete quota available until the next hour', () => {
+    expect(wishQuota([], dateAt(18, 42))).toEqual({
+      limit: wishesPerHour,
+      used: 0,
+      remaining: 3,
+      exhausted: false,
+      resetsAt: dateAt(19, 0),
+    });
   });
-});
 
-test('wishes of the current hour count', () => {
-  const quota = wishQuota([at(18, 5), at(18, 30)], at(18, 42));
+  it('counts submissions made during the current hour', () => {
+    const result = wishQuota([dateAt(18, 5), dateAt(18, 30)], dateAt(18, 42));
 
-  expect(quota.used).toBe(2);
-  expect(quota.remaining).toBe(1);
-});
+    expect(result).toMatchObject({ used: 2, remaining: 1, exhausted: false });
+  });
 
-test('the third wish exhausts the quota', () => {
-  const quota = wishQuota([at(18, 5), at(18, 30), at(18, 41)], at(18, 42));
+  it('marks the quota as exhausted after the third submission', () => {
+    const result = wishQuota([dateAt(18, 5), dateAt(18, 30), dateAt(18, 41)], dateAt(18, 42));
 
-  expect(quota.exhausted).toBe(true);
-  expect(quota.remaining).toBe(0);
-});
+    expect(result.remaining).toBe(0);
+    expect(result.exhausted).toBe(true);
+  });
 
-test('the quota resets at the full hour, not 60 minutes after each wish', () => {
-  const quota = wishQuota([at(18, 50), at(18, 55), at(18, 59)], at(19, 1));
+  it('resets on the next full hour', () => {
+    const result = wishQuota([dateAt(18, 50), dateAt(18, 55), dateAt(18, 59)], dateAt(19, 1));
 
-  expect(quota.used).toBe(0);
-  expect(quota.resetsAt).toEqual(at(20, 0));
-});
+    expect(result.used).toBe(0);
+    expect(result.resetsAt).toEqual(dateAt(20, 0));
+  });
 
-test('the reset carries over midnight', () => {
-  expect(wishQuota([], at(23, 30)).resetsAt).toEqual(new Date(2026, 9, 16, 0, 0));
-});
+  it('moves the reset time into the following day at midnight', () => {
+    expect(wishQuota([], dateAt(23, 30)).resetsAt).toEqual(new Date(2026, 9, 16, 0, 0));
+  });
 
-test('remaining never drops below zero', () => {
-  const sent = [at(18, 1), at(18, 2), at(18, 3), at(18, 4)];
+  it('never reports a negative remaining value', () => {
+    const submissions = [dateAt(18, 1), dateAt(18, 2), dateAt(18, 3), dateAt(18, 4)];
 
-  expect(wishQuota(sent, at(18, 10)).remaining).toBe(0);
+    expect(wishQuota(submissions, dateAt(18, 10)).remaining).toBe(0);
+  });
 });

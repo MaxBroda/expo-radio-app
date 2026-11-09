@@ -20,31 +20,68 @@ export type WishValidation =
 export type WishRejection = WishProblem | 'quotaExhausted' | 'alreadyRequested';
 
 export class WishRejectedError extends Error {
-  constructor(readonly reason: WishRejection) {
+  readonly reason: WishRejection;
+
+  constructor(reason: WishRejection) {
     super(`Wish rejected: ${reason}`);
     this.name = 'WishRejectedError';
+    this.reason = reason;
   }
 }
 
-function normalizeSong(song: WishedSong): WishedSong {
-  if (song.kind === 'catalog') return song;
-  return { kind: 'freeText', description: song.description.replace(/\s+/g, ' ').trim() };
+const compactWhitespace = (value: string): string => value.replace(/\s+/g, ' ').trim();
+
+function prepareSong(song: WishedSong): WishedSong {
+  if (song.kind === 'catalog') {
+    return song;
+  }
+
+  return {
+    kind: 'freeText',
+    description: compactWhitespace(song.description),
+  };
 }
 
-/** App and request system both run this, so a wish is checked the same way on either side. */
-export function validateWish(draft: WishDraft): WishValidation {
-  const problems: WishProblem[] = [];
-  const song = draft.song && normalizeSong(draft.song);
-  const greeting = draft.greeting?.trim() || undefined;
+function prepareGreeting(value: string | undefined): string | undefined {
+  const greeting = value?.trim();
+  return greeting ? greeting : undefined;
+}
 
-  if (!song) {
+function collectProblems(
+  song: WishedSong | undefined,
+  greeting: string | undefined,
+): WishProblem[] {
+  const problems: WishProblem[] = [];
+
+  if (song === undefined) {
     problems.push('songMissing');
   } else if (song.kind === 'freeText') {
-    if (song.description.length < wishLimits.freeTextMin) problems.push('freeTextTooShort');
-    if (song.description.length > wishLimits.freeTextMax) problems.push('freeTextTooLong');
-  }
-  if (greeting && greeting.length > wishLimits.greetingMax) problems.push('greetingTooLong');
+    const length = song.description.length;
 
-  if (!song || problems.length > 0) return { ok: false, problems };
-  return { ok: true, input: greeting ? { song, greeting } : { song } };
+    if (length < wishLimits.freeTextMin) {
+      problems.push('freeTextTooShort');
+    }
+    if (length > wishLimits.freeTextMax) {
+      problems.push('freeTextTooLong');
+    }
+  }
+
+  if (greeting !== undefined && greeting.length > wishLimits.greetingMax) {
+    problems.push('greetingTooLong');
+  }
+
+  return problems;
+}
+
+export function validateWish(draft: WishDraft): WishValidation {
+  const song = draft.song === undefined ? undefined : prepareSong(draft.song);
+  const greeting = prepareGreeting(draft.greeting);
+  const problems = collectProblems(song, greeting);
+
+  if (song === undefined || problems.length !== 0) {
+    return { ok: false, problems };
+  }
+
+  const input: WishInput = greeting === undefined ? { song } : { song, greeting };
+  return { ok: true, input };
 }
