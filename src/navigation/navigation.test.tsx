@@ -102,14 +102,16 @@ test('choosing listener again returns to now playing', async () => {
   expect(screen.getByText('Verlauf')).toBeTruthy();
 });
 
-test('components page is reachable from the demo sheet', async () => {
+test('the demo sheet switches the theme without leaving it', async () => {
   const user = setupUser();
   const app = await renderApp();
 
   await user.press(screen.getByLabelText('Demo-Steuerung öffnen'));
-  await user.press(screen.getByText('Components'));
+  await user.press(screen.getByRole('button', { name: 'Dunkel' }));
 
-  expect(app.getPathname()).toBe('/components');
+  expect(screen.getByRole('button', { name: 'Dunkel' })).toBeSelected();
+  expect(screen.getByRole('button', { name: 'System' })).not.toBeSelected();
+  expect(app.getPathname()).toBe('/demo');
 });
 
 test('back in a rating modal returns to now playing', async () => {
