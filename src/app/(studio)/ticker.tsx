@@ -1,6 +1,7 @@
 import { AreaScreen } from '@/components/area-screen';
 import { ActivityPlaceholder } from '@/components/studio/activity-placeholder';
 import { CurrentSong } from '@/components/studio/current-song';
+import { RatingFilter } from '@/components/studio/rating-filter';
 
 import type { Rating, RatingId } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
@@ -8,7 +9,7 @@ import type { TrackId } from '@/domain/track';
 import { StyleSheet } from 'react-native';
 
 export default function TickerScreen() {
-  // !!! implement actual data call of reviews
+  // !!! implement actual data call of ratings
   const placeholderRatings: Rating[] = [
     {
       id: 'r1' as RatingId,
@@ -29,6 +30,7 @@ export default function TickerScreen() {
     <AreaScreen area="studio">
       <CurrentSong />
       <ActivityPlaceholder />
+      <RatingFilter />
     </AreaScreen>
   );
 }
