@@ -1,4 +1,5 @@
 import { AreaScreen } from '@/components/area-screen';
+import { ActivityPlaceholder } from '@/components/studio/activity-placeholder';
 import { CurrentSong } from '@/components/studio/current-song';
 
 import type { Rating, RatingId } from '@/domain/rating';
@@ -27,6 +28,7 @@ export default function TickerScreen() {
   return (
     <AreaScreen area="studio">
       <CurrentSong />
+      <ActivityPlaceholder />
     </AreaScreen>
   );
 }
