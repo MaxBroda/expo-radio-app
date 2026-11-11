@@ -232,3 +232,23 @@ test('a listener change while sending keeps the rating with its original listene
   expect(await flow.ratedScore(track)).toBe(4);
   flow.dispose();
 });
+
+test('a failed local save can be retried only for the listener who sent the rating', async () => {
+  const clock = new DemoClock(now, () => 0);
+  const settings = new DemoSettings();
+  const send = jest.fn(async (input: RatingInput) => rating(input));
+  const flow = createDemoRatingSubmission({ submitRating: send, list: jest.fn() }, clock, {
+    listener: () => settings.get().listener,
+  });
+  jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('storage'));
+
+  expect(await flow.submit(track, 4)).toMatchObject({ status: 'sent', remembered: false });
+  settings.set({ listener: 2 });
+  expect(await flow.retryLocalSave()).toBe(false);
+  expect(await flow.ratedScore(track)).toBeUndefined();
+  settings.set({ listener: 1 });
+  expect(await flow.retryLocalSave()).toBe(true);
+  expect(await flow.ratedScore(track)).toBe(4);
+  expect(send).toHaveBeenCalledTimes(1);
+  flow.dispose();
+});
