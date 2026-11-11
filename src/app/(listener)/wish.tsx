@@ -1,6 +1,13 @@
 import { router, useFocusEffect } from 'expo-router';
 import { CircleAlert, Search, WifiOff } from 'lucide-react-native';
-import { useCallback, useReducer, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AreaScreen } from '@/components/area-screen';
@@ -16,6 +23,7 @@ import {
   votesLabel,
 } from '@/components/wish/wish-format';
 import { WishOption } from '@/components/wish/wish-option';
+import { useDemo, useDemoFlags } from '@/demo/demo-provider';
 import type { Track } from '@/domain/track';
 import type { Wish, WishedSong } from '@/domain/wish';
 import type { WishQuota } from '@/domain/wish-quota';
@@ -184,6 +192,25 @@ function createHint(
 }
 
 export default function WishScreen() {
+  const { listener } = useDemoFlags();
+  const { clock } = useDemo();
+  const revision = useSyncExternalStore(
+    (onChange) => clock.subscribe(onChange),
+    () => clock.revision,
+    () => clock.revision,
+  );
+  return <WishForm key={`${listener}:${revision}`} />;
+}
+
+function WishForm() {
+  const { clock, settings } = useDemo();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const colors = useTheme();
   const { wishSystem, musicDatabase } = useStations();
   const [state, dispatch] = useReducer(reduceScreen, initialState);
@@ -237,16 +264,22 @@ export default function WishScreen() {
       return;
     }
 
+    const listener = settings.get().listener;
+    const revision = clock.revision;
+    const isCurrent = () =>
+      mounted.current && settings.get().listener === listener && clock.revision === revision;
     dispatch({ type: 'sendingStarted' });
 
     try {
       const wish = await wishSystem.submitRequest(validation.input);
+      if (!isCurrent()) return;
       dispatch({ type: 'requestSent' });
       router.push({
         pathname: '/wish/sent',
         params: { id: wish.id, greeting: validation.input.greeting ?? '' },
       });
     } catch (error) {
+      if (!isCurrent()) return;
       if (error instanceof WishRejectedError && error.reason === 'quotaExhausted') {
         wishSystem.quota().then(
           (quota) => dispatch({ type: 'quotaLoaded', quota }),
@@ -258,7 +291,7 @@ export default function WishScreen() {
         dispatch({ type: 'requestFailed' });
       }
     } finally {
-      dispatch({ type: 'sendingFinished' });
+      if (isCurrent()) dispatch({ type: 'sendingFinished' });
     }
   }
 

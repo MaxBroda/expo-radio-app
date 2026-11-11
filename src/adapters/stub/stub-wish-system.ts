@@ -1,4 +1,5 @@
-import type { DemoFlags } from '@/demo/demo-settings';
+import type { DemoClock } from '@/demo/demo-clock';
+import type { DemoFlags, DemoListener } from '@/demo/demo-settings';
 import { StationUnavailableError } from '@/domain/errors';
 import type { Wish, WishedSong, WishId, WishInput, WishStatus } from '@/domain/wish';
 import { wishQuota, type WishQuota } from '@/domain/wish-quota';
@@ -9,13 +10,15 @@ import { seedWishes } from '@/seed/wishes';
 
 import { reachStation } from './reach-station';
 
-type Flags = Pick<DemoFlags, 'connection' | 'sendFails' | 'quotaExhausted'>;
+type Flags = Pick<DemoFlags, 'connection' | 'sendFails' | 'quotaExhausted'> &
+  Partial<Pick<DemoFlags, 'listener'>>;
 
 type Options = {
   now?: () => Date;
   wishes?: readonly Wish[];
   delayMs?: number;
   flags?: () => Flags;
+  demoClock?: DemoClock;
 };
 
 const defaultFlags: Flags = {
@@ -40,8 +43,11 @@ const copyWish = (wish: Wish): Wish => ({ ...wish });
 
 export class StubWishSystem implements WishSystem {
   private items: Wish[];
-  private readonly sentDuringSession: Date[] = [];
-  private readonly supportedIds = new Set<WishId>();
+  private readonly sentDuringSession = new Map<DemoListener, Date[]>();
+  private readonly supportedIds = new Map<DemoListener, Set<WishId>>();
+  private readonly demoClock?: DemoClock;
+  private revision: number;
+  private readonly initialWishes?: readonly Wish[];
   private sequence: number;
   private readonly clock: () => Date;
   private readonly latency: number;
@@ -51,6 +57,9 @@ export class StubWishSystem implements WishSystem {
     const { now = () => new Date(), wishes, delayMs = 400, flags = () => defaultFlags } = options;
 
     this.clock = now;
+    this.demoClock = options.demoClock;
+    this.revision = options.demoClock?.revision ?? 0;
+    this.initialWishes = wishes;
     this.latency = delayMs;
     this.readFlags = flags;
     this.items = [...(wishes ?? seedWishes(now(), catalog))];
@@ -58,7 +67,15 @@ export class StubWishSystem implements WishSystem {
   }
 
   async submitRequest(input: WishInput): Promise<Wish> {
+    const listener = this.readFlags().listener ?? 1;
+    const revision = this.demoClock?.revision;
     await this.ensureReachable();
+    if (revision !== this.demoClock?.revision) throw new StationUnavailableError('WishSystem');
+    this.resetIfNeeded();
+    const supported = this.supportedIds.get(listener) ?? new Set<WishId>();
+    const sent = this.sentDuringSession.get(listener) ?? [];
+    this.supportedIds.set(listener, supported);
+    this.sentDuringSession.set(listener, sent);
 
     if (this.readFlags().sendFails) {
       throw new StationUnavailableError('WishSystem');
@@ -71,8 +88,7 @@ export class StubWishSystem implements WishSystem {
 
     const { song, greeting } = validation.input;
     const alreadySupported = this.items.some(
-      (wish) =>
-        wish.status === 'open' && this.supportedIds.has(wish.id) && songsEqual(wish.song, song),
+      (wish) => wish.status === 'open' && supported.has(wish.id) && songsEqual(wish.song, song),
     );
 
     if (alreadySupported) {
@@ -80,11 +96,11 @@ export class StubWishSystem implements WishSystem {
     }
 
     const submittedAt = this.clock();
-    if (this.quotaAt(submittedAt).exhausted) {
+    if (this.quotaAt(submittedAt, listener).exhausted) {
       throw new WishRejectedError('quotaExhausted');
     }
 
-    this.sentDuringSession.push(submittedAt);
+    sent.push(submittedAt);
 
     if (song.kind === 'catalog') {
       const existing = this.items.find(
@@ -95,7 +111,7 @@ export class StubWishSystem implements WishSystem {
       );
 
       if (existing !== undefined) {
-        this.supportedIds.add(existing.id);
+        supported.add(existing.id);
         return this.save({
           ...existing,
           votes: existing.votes + 1,
@@ -106,13 +122,14 @@ export class StubWishSystem implements WishSystem {
 
     const created = this.createWish(validation.input, submittedAt);
     this.items.unshift(created);
-    this.supportedIds.add(created.id);
+    supported.add(created.id);
 
     return copyWish(created);
   }
 
   async list(): Promise<Wish[]> {
     await this.ensureReachable();
+    this.resetIfNeeded();
 
     return this.items
       .slice()
@@ -122,6 +139,7 @@ export class StubWishSystem implements WishSystem {
 
   async setStatus(id: WishId, status: WishStatus): Promise<Wish> {
     await this.ensureReachable();
+    this.resetIfNeeded();
 
     const current = this.items.find((wish) => wish.id === id);
     if (current === undefined) {
@@ -132,8 +150,19 @@ export class StubWishSystem implements WishSystem {
   }
 
   async quota(): Promise<WishQuota> {
+    const listener = this.readFlags().listener ?? 1;
     await this.ensureReachable();
-    return this.quotaAt(this.clock());
+    this.resetIfNeeded();
+    return this.quotaAt(this.clock(), listener);
+  }
+
+  private resetIfNeeded() {
+    if (!this.demoClock || this.revision === this.demoClock.revision) return;
+    this.revision = this.demoClock.revision;
+    this.items = [...(this.initialWishes ?? seedWishes(this.clock(), catalog))];
+    this.sequence = this.items.length;
+    this.sentDuringSession.clear();
+    this.supportedIds.clear();
   }
 
   private createWish(input: WishInput, createdAt: Date): Wish {
@@ -148,8 +177,8 @@ export class StubWishSystem implements WishSystem {
     };
   }
 
-  private quotaAt(now: Date): WishQuota {
-    const quota = wishQuota(this.sentDuringSession, now);
+  private quotaAt(now: Date, listener: DemoListener): WishQuota {
+    const quota = wishQuota(this.sentDuringSession.get(listener) ?? [], now);
 
     if (!this.readFlags().quotaExhausted) {
       return quota;
