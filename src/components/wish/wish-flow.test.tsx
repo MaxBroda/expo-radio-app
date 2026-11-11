@@ -160,7 +160,7 @@ describe('listener wish flow', () => {
     await user.press(sendButton());
     expect(await screen.findByText('Wunsch nicht gesendet', {}, asyncOptions)).toBeTruthy();
 
-    settings.set({ sendFails: false, quotaExhausted: true });
+    await act(() => settings.set({ sendFails: false, quotaExhausted: true }));
     await act(() => router.push('/wish/sent?id=w_01'));
     await act(() => router.back());
 
@@ -189,5 +189,23 @@ describe('listener wish flow', () => {
     expect(sendButton()).toBeDisabled();
     expect(screen.getByText('Noch 2 von 3 Wünschen frei · zurückgesetzt 19:00')).toBeTruthy();
     expect(pathname()).toBe('/');
+  });
+  it('reloads the wish form and quota for the selected listener', async () => {
+    const { user, settings } = await renderWishFlow();
+    await user.press(await waitForPopularSongs());
+    await user.press(sendButton());
+    await screen.findByText('Wunsch ist im Studio', {}, asyncOptions);
+    await user.press(screen.getByRole('button', { name: 'Fertig' }));
+    expect(
+      await screen.findByText('Noch 2 von 3 Wünschen frei · zurückgesetzt 19:00', {}, asyncOptions),
+    ).toBeTruthy();
+    await act(() => settings.set({ listener: 2 }));
+    expect(
+      await screen.findByText('Noch 3 von 3 Wünschen frei · zurückgesetzt 19:00', {}, asyncOptions),
+    ).toBeTruthy();
+    await user.press(await waitForPopularSongs());
+    await user.press(sendButton());
+    expect(await screen.findByText('Wunsch ist im Studio', {}, asyncOptions)).toBeTruthy();
+    expect(await screen.findByText('26', {}, asyncOptions)).toBeTruthy();
   });
 });

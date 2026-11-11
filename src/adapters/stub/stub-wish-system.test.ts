@@ -1,3 +1,4 @@
+import { DemoClock } from '@/demo/demo-clock';
 import { defaultFlags, type DemoFlags } from '@/demo/demo-settings';
 import { StationUnavailableError } from '@/domain/errors';
 import type { TrackId } from '@/domain/track';
@@ -107,6 +108,69 @@ describe('StubWishSystem', () => {
 
     expect((await system.list())[0].votes).toBe(5);
     expect((await system.quota()).remaining).toBe(2);
+  });
+
+  it('keeps quota and votes separate for each listener while sharing wishes', async () => {
+    const { system, changeFlags } = createHarness({ wishes: [] });
+    const input = { song: catalogSong('t_0038') };
+    await system.submitRequest(input);
+    await expect(system.submitRequest(input)).rejects.toEqual(
+      new WishRejectedError('alreadyRequested'),
+    );
+    changeFlags({ listener: 2 });
+    expect((await system.quota()).remaining).toBe(3);
+    expect((await system.submitRequest(input)).votes).toBe(2);
+    expect((await system.quota()).remaining).toBe(2);
+    changeFlags({ listener: 1 });
+    expect((await system.quota()).remaining).toBe(2);
+    expect(await system.list()).toHaveLength(1);
+  });
+
+  it('resets wishes and all listeners after a demo clock jump', async () => {
+    const clock = new DemoClock(new Date(2026, 9, 15, 18, 42), () => 0);
+    let flags = { ...defaultFlags };
+    const system = new StubWishSystem({
+      now: () => clock.now(),
+      demoClock: clock,
+      wishes: [],
+      delayMs: 0,
+      flags: () => flags,
+    });
+    const input = { song: catalogSong('t_0038') };
+    await system.submitRequest(input);
+    flags = { ...flags, listener: 2 };
+    await system.submitRequest(input);
+    clock.jumpTo(clock.now());
+    expect((await system.quota()).remaining).toBe(3);
+    expect(await system.list()).toEqual([]);
+    flags = { ...flags, listener: 1 };
+    expect((await system.quota()).remaining).toBe(3);
+    expect((await system.submitRequest(input)).votes).toBe(1);
+  });
+
+  it('keeps an in-flight request with the listener who started it', async () => {
+    let flags = { ...defaultFlags };
+    const system = new StubWishSystem({ wishes: [], delayMs: 20, flags: () => flags });
+    const pending = system.submitRequest({ song: catalogSong('t_0038') });
+    flags = { ...flags, listener: 2 };
+    await pending;
+    expect((await system.quota()).remaining).toBe(3);
+    flags = { ...flags, listener: 1 };
+    expect((await system.quota()).remaining).toBe(2);
+  });
+
+  it('does not send a request started before a demo clock jump', async () => {
+    const clock = new DemoClock(new Date(2026, 9, 15, 18, 42), () => 0);
+    const system = new StubWishSystem({
+      now: () => clock.now(),
+      demoClock: clock,
+      wishes: [],
+      delayMs: 20,
+    });
+    const pending = system.submitRequest({ song: catalogSong('t_0038') });
+    clock.jumpTo(clock.now());
+    await expect(pending).rejects.toBeInstanceOf(StationUnavailableError);
+    expect(await system.list()).toEqual([]);
   });
 
   it('does not allow an additional vote for a newly created own wish', async () => {

@@ -43,6 +43,7 @@ export function createStubStations(
   const wishSystem = new StubWishSystem({
     now: context.now,
     flags: context.flags,
+    demoClock: clock,
   });
 
   return { playout, musicDatabase, feedbackHub, wishSystem, notifications };
