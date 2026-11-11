@@ -1,12 +1,13 @@
 import { AreaScreen } from '@/components/area-screen';
 import { ActivityPlaceholder } from '@/components/studio/activity-placeholder';
 import { CurrentSong } from '@/components/studio/current-song';
+import { RatingCard } from '@/components/studio/rating-card';
 import { RatingFilter } from '@/components/studio/rating-filter';
 
 import type { Rating, RatingId } from '@/domain/rating';
 import type { TrackId } from '@/domain/track';
 
-import { StyleSheet } from 'react-native';
+import { FlatList, StyleSheet } from 'react-native';
 
 export default function TickerScreen() {
   // !!! implement actual data call of ratings
@@ -31,6 +32,7 @@ export default function TickerScreen() {
       <CurrentSong />
       <ActivityPlaceholder />
       <RatingFilter />
+      <FlatList data={placeholderRatings} renderItem={({ item }) => <RatingCard rating={item} />} />
     </AreaScreen>
   );
 }
