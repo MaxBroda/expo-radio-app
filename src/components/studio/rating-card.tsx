@@ -1,3 +1,4 @@
+import { useSubjectName } from '@/components/studio/use-subject-name';
 import { AppText, Card, Pill } from '@/components/ui';
 import type { Rating } from '@/domain/rating';
 import { useTheme } from '@/theme';
@@ -10,6 +11,7 @@ export function RatingCard({ rating, isNew }: { rating: Rating; isNew?: boolean 
   const colors = useTheme();
   const kind = rating.subject.kind === 'track' ? 'Titel' : 'Moderation';
   const time = rating.createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  const subjectName = useSubjectName(rating.subject);
 
   return (
     <Card>
@@ -30,9 +32,8 @@ export function RatingCard({ rating, isNew }: { rating: Rating; isNew?: boolean 
 
       {rating.comment && <AppText variant="bodyStrong">„{rating.comment}“</AppText>}
 
-      {/* !!! Get Song & Artist from Datamodel */}
       <AppText variant="caption" tone="muted">
-        Song - Künstler
+        {subjectName}
       </AppText>
     </Card>
   );
