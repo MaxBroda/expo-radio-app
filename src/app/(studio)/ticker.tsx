@@ -15,7 +15,7 @@ export default function TickerScreen() {
     <AreaScreen area="studio">
       <NowPlayingBar />
       <ActivityPlaceholder />
-      <RatingFilter />
+      <RatingFilter ratings={ratings} />
       <FlatList
         data={ratings}
         renderItem={({ item }) => <RatingCard rating={item} />}
