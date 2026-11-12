@@ -1,28 +1,46 @@
+import { duration } from '@/components/now-playing/now-playing-format';
+import { useNowPlaying } from '@/components/now-playing/use-now-playing';
+import { useTickingNow } from '@/components/now-playing/use-ticking-now';
 import { AppText, Card } from '@/components/ui';
 import { CoverPlaceholder } from '@/components/wish/cover-placeholder';
+import { clockTime } from '@/components/wish/wish-format';
 import { StyleSheet, View } from 'react-native';
 
 export function NowPlayingBar() {
+  const { state } = useNowPlaying();
+  const now = useTickingNow();
+
+  if (state.status !== 'live') {
+    return (
+      <Card>
+        <AppText tone="muted">Lädt …</AppText>
+      </Card>
+    );
+  }
+
+  const track = state.snapshot.playing.track;
+  const show = state.snapshot.playing.show;
+  const startedAt = state.snapshot.playing.startedAt;
+
+  const songEnd = startedAt.getTime() + (track.durationSec ?? 0) * 1000;
+  const songRemaining = duration((songEnd - now.getTime()) / 1000);
+
   return (
     <Card style={styles.row}>
-      {/* !!! get actual track id for the cover */}
-      <CoverPlaceholder seed="placeholder" size={36} />
+      <CoverPlaceholder seed={track.id} size={36} />
 
       <View style={styles.info}>
-        {/* !!! get actual track title and artist */}
         <AppText variant="bodyStrong" numberOfLines={1}>
-          Songtitel — Künstler
+          {track.title} — {track.artist}
         </AppText>
 
-        {/* !!! get actual show title and remaining show time */}
         <AppText variant="caption" tone="muted" numberOfLines={1}>
-          Sendung - Rest 1:18 Std
+          {show.title} · bis {clockTime(show.endsAt)}
         </AppText>
       </View>
 
       <View style={styles.remaining}>
-        {/* !!! get actual remaining track time */}
-        <AppText variant="mono">1:41</AppText>
+        <AppText variant="mono">{songRemaining}</AppText>
         <AppText variant="caption" tone="muted">
           Rest Titel
         </AppText>
