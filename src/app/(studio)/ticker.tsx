@@ -1,6 +1,6 @@
 import { AreaScreen } from '@/components/area-screen';
 import { ActivityPlaceholder } from '@/components/studio/activity-placeholder';
-import { CurrentSong } from '@/components/studio/current-song';
+import { NowPlayingBar } from '@/components/studio/now-playing-bar';
 import { RatingCard } from '@/components/studio/rating-card';
 import { RatingFilter } from '@/components/studio/rating-filter';
 import { useRatings } from '@/components/studio/use-ratings';
@@ -13,7 +13,7 @@ export default function TickerScreen() {
 
   return (
     <AreaScreen area="studio">
-      <CurrentSong />
+      <NowPlayingBar />
       <ActivityPlaceholder />
       <RatingFilter />
       <FlatList

@@ -2,7 +2,7 @@ import { AppText, Card } from '@/components/ui';
 import { CoverPlaceholder } from '@/components/wish/cover-placeholder';
 import { StyleSheet, View } from 'react-native';
 
-export function CurrentSong() {
+export function NowPlayingBar() {
   return (
     <Card style={styles.row}>
       {/* !!! get actual track id for the cover */}
