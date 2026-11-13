@@ -4,7 +4,7 @@ import { type ColorValue, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Tappable } from '@/components/ui';
-import { fonts, spacing, touchTarget, useTheme } from '@/theme';
+import { fonts, radius, spacing, touchTarget, useTheme } from '@/theme';
 
 type Area = 'listener' | 'studio';
 type IconProps = { focused: boolean; color: ColorValue };
@@ -14,7 +14,13 @@ type TabBarProps = {
   state: { index: number; routes: { key: string; name: string }[] };
   descriptors: Record<
     string,
-    { options: { title?: string; tabBarIcon?: (props: IconProps) => ReactNode } }
+    {
+      options: {
+        title?: string;
+        tabBarIcon?: (props: IconProps) => ReactNode;
+        tabBarBadge?: () => ReactNode;
+      };
+    }
   >;
   emitter: {
     emit(event: { type: 'tabPress'; target: string; canPreventDefault: true }): {
@@ -34,6 +40,22 @@ export function tabIcon(Icon: LucideIcon) {
   return function render({ color }: IconProps) {
     return <Icon color={color} />;
   };
+}
+
+export function tabBadge(count: number) {
+  if (count === 0) return undefined;
+  return function render() {
+    return <Badge count={count} />;
+  };
+}
+
+function Badge({ count }: { count: number }) {
+  const colors = useTheme();
+  return (
+    <View style={[styles.badge, { backgroundColor: colors.accent.base }]}>
+      <Text style={[styles.badgeText, { color: colors.accent.ink }]}>{count}</Text>
+    </View>
+  );
 }
 
 type Props = TabBarProps & { area: Area };
@@ -79,7 +101,10 @@ export function TabBar({ state, descriptors, emitter, navigateToTab, area }: Pro
             accessibilityLabel={label}
             style={styles.tab}
           >
-            {options.tabBarIcon?.({ focused, color })}
+            <View>
+              {options.tabBarIcon?.({ focused, color })}
+              {options.tabBarBadge?.()}
+            </View>
             <Text style={[styles.label, { color }]}>{label}</Text>
           </Tappable>
         );
@@ -102,4 +127,16 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   label: { fontFamily: fonts.medium, fontSize: 12 },
+  badge: {
+    position: 'absolute',
+    top: -spacing.xs,
+    right: -spacing.md,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { fontFamily: fonts.medium, fontSize: 11 },
 });

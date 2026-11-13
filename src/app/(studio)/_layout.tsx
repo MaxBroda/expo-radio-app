@@ -1,13 +1,16 @@
+import { usePathname } from 'expo-router';
 import { TopTabs } from 'expo-router/js-top-tabs';
 import { CirclePlus, Gauge, MessageSquare } from 'lucide-react-native';
 
 import { useRushRatings } from '@/components/studio/use-rush-ratings';
-import { renderTabBar, tabIcon } from '@/navigation/tab-bar';
+import { useUnseenRatings } from '@/components/studio/use-unseen-ratings';
+import { renderTabBar, tabBadge, tabIcon } from '@/navigation/tab-bar';
 import { useTheme } from '@/theme';
 
 export default function StudioTabs() {
   const colors = useTheme();
   useRushRatings();
+  const unseen = useUnseenRatings(usePathname() === '/ticker');
 
   return (
     <TopTabs
@@ -21,7 +24,11 @@ export default function StudioTabs() {
       />
       <TopTabs.Screen
         name="ticker"
-        options={{ title: 'Ticker', tabBarIcon: tabIcon(MessageSquare) }}
+        options={{
+          title: 'Ticker',
+          tabBarIcon: tabIcon(MessageSquare),
+          tabBarBadge: tabBadge(unseen),
+        }}
       />
       <TopTabs.Screen
         name="wishes"
