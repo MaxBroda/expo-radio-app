@@ -3,7 +3,7 @@ import { useStations } from '@/stations/stations-provider';
 import { useEffect, useState } from 'react';
 
 export function useRatings() {
-  const { feedbackHub } = useStations();
+  const { feedbackHub, notifications } = useStations();
 
   const [ratings, setRatings] = useState<Rating[]>([]);
 
@@ -13,6 +13,12 @@ export function useRatings() {
       () => {},
     );
   }, [feedbackHub]);
+
+  useEffect(() => {
+    return notifications.subscribe((event) => {
+      if (event.type === 'rating') setRatings((list) => [event.rating, ...list]);
+    });
+  }, [notifications]);
 
   return ratings;
 }
