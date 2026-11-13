@@ -1,11 +1,13 @@
 import { TopTabs } from 'expo-router/js-top-tabs';
 import { CirclePlus, Gauge, MessageSquare } from 'lucide-react-native';
 
+import { useRushRatings } from '@/components/studio/use-rush-ratings';
 import { renderTabBar, tabIcon } from '@/navigation/tab-bar';
 import { useTheme } from '@/theme';
 
 export default function StudioTabs() {
   const colors = useTheme();
+  useRushRatings();
 
   return (
     <TopTabs
