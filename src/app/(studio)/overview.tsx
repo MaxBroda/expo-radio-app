@@ -1,10 +1,10 @@
 import { AreaScreen } from '@/components/area-screen';
-import { ScreenPlaceholder } from '@/components/screen-placeholder';
+import { NowPlayingBar } from '@/components/studio/now-playing-bar';
 
 export default function OverviewScreen() {
   return (
     <AreaScreen area="studio">
-      <ScreenPlaceholder title="Überblick" screenshots="20–21, 25" />
+      <NowPlayingBar />
     </AreaScreen>
   );
 }
