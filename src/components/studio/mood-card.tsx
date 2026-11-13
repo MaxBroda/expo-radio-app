@@ -5,7 +5,7 @@ import { AppText, Card, Pill } from '@/components/ui';
 import { StyleSheet, View } from 'react-native';
 import { clockTime } from '@/components/wish/wish-format';
 
-function decimal(value: number) {
+export function decimal(value: number) {
   return value.toFixed(1).replace('.', ',');
 }
 

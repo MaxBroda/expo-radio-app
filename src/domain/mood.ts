@@ -2,7 +2,7 @@ import type { Rating } from './rating';
 
 const fifteenMinutes = 15 * 60 * 1000;
 
-function average(ratings: Rating[]) {
+export function average(ratings: Rating[]) {
   if (ratings.length === 0) return undefined;
   const sum = ratings.reduce((total, rating) => total + rating.score, 0);
   return sum / ratings.length;
