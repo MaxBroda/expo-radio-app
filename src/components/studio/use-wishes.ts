@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import type { Wish } from '@/domain/wish';
+import type { Wish, WishId, WishStatus } from '@/domain/wish';
 import { useStations } from '@/stations/stations-provider';
 
 export function useWishes() {
@@ -11,5 +11,11 @@ export function useWishes() {
     wishSystem.list().then((list) => setWishes(list));
   }, [wishSystem]);
 
-  return wishes;
+  function setStatus(id: WishId, status: WishStatus) {
+    wishSystem.setStatus(id, status).then((updated) => {
+      setWishes((list) => list.map((wish) => (wish.id === updated.id ? updated : wish)));
+    });
+  }
+
+  return { wishes, setStatus };
 }

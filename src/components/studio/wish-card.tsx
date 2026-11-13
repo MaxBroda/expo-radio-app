@@ -1,13 +1,18 @@
 import { useWishTrack } from '@/components/studio/use-wish-track';
 import { AppButton, AppText, Card, Pill } from '@/components/ui';
 import { trackLine } from '@/components/wish/wish-format';
-import type { Wish } from '@/domain/wish';
+import type { Wish, WishStatus } from '@/domain/wish';
 import { spacing } from '@/theme';
 import { StyleSheet, View } from 'react-native';
 
 const statusLabel = { open: 'offen', accepted: 'übernommen', rejected: 'abgelehnt' };
 
-export function WishCard({ wish }: { wish: Wish }) {
+type Props = {
+  wish: Wish;
+  onSetStatus: (status: WishStatus) => void;
+};
+
+export function WishCard({ wish, onSetStatus }: Props) {
   const track = useWishTrack(wish.song);
 
   const title = wish.song.kind === 'catalog' ? (track?.title ?? '') : 'Freitext-Wunsch';
@@ -35,12 +40,17 @@ export function WishCard({ wish }: { wish: Wish }) {
 
       {wish.status === 'open' && (
         <View style={styles.buttons}>
-          {/* !!! accept and reject wish */}
-          <AppButton label="übernehmen" onPress={() => {}} style={styles.button} />
+          <AppButton
+            label="übernehmen"
+            size="compact"
+            onPress={() => onSetStatus('accepted')}
+            style={styles.button}
+          />
           <AppButton
             label="ablehnen"
+            size="compact"
             variant="secondary"
-            onPress={() => {}}
+            onPress={() => onSetStatus('rejected')}
             style={styles.button}
           />
         </View>

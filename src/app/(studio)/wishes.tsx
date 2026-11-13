@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { FlatList, StyleSheet } from 'react-native';
 
 export default function WishesScreen() {
-  const wishes = useWishes();
+  const { wishes, setStatus } = useWishes();
   const [sort, setSort] = useState<Sort>('votes');
 
   return (
@@ -19,7 +19,9 @@ export default function WishesScreen() {
       <WishSort selected={sort} onSelect={setSort} />
       <FlatList
         data={wishes}
-        renderItem={({ item }) => <WishCard wish={item} />}
+        renderItem={({ item }) => (
+          <WishCard wish={item} onSetStatus={(status) => setStatus(item.id, status)} />
+        )}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       />
