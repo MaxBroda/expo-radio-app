@@ -5,6 +5,7 @@ import { AreaScreen } from '@/components/area-screen';
 import { NowPlayingBar } from '@/components/studio/now-playing-bar';
 import { MoodCard } from '@/components/studio/mood-card';
 import { KeyFigures } from '@/components/studio/key-figures';
+import { LatestRating } from '@/components/studio/latest-rating';
 
 export default function OverviewScreen() {
   const ratings = useRatings();
@@ -16,6 +17,7 @@ export default function OverviewScreen() {
       <NowPlayingBar />
       <MoodCard ratings={ratings} now={now} />
       <KeyFigures ratings={ratings} wishes={wishes} now={now} />
+      <LatestRating ratings={ratings} now={now} />
     </AreaScreen>
   );
 }
