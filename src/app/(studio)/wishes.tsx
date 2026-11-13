@@ -12,13 +12,21 @@ export default function WishesScreen() {
   const { wishes, setStatus } = useWishes();
   const [sort, setSort] = useState<Sort>('votes');
 
+  const sortedWishes = [...wishes];
+
+  if (sort === 'votes') {
+    sortedWishes.sort((a, b) => b.votes - a.votes);
+  } else {
+    sortedWishes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
   return (
     <AreaScreen area="studio">
       <NowPlayingBar />
       <WishSummary wishes={wishes} />
       <WishSort selected={sort} onSelect={setSort} />
       <FlatList
-        data={wishes}
+        data={sortedWishes}
         renderItem={({ item }) => (
           <WishCard wish={item} onSetStatus={(status) => setStatus(item.id, status)} />
         )}
