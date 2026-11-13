@@ -1,10 +1,10 @@
 import { AreaScreen } from '@/components/area-screen';
-import { ScreenPlaceholder } from '@/components/screen-placeholder';
+import { NowPlayingBar } from '@/components/studio/now-playing-bar';
 
 export default function WishesScreen() {
   return (
     <AreaScreen area="studio">
-      <ScreenPlaceholder title="Wünsche" screenshots="24" />
+      <NowPlayingBar />
     </AreaScreen>
   );
 }
