@@ -1,6 +1,7 @@
 import { AreaScreen } from '@/components/area-screen';
 import { ActivityPlaceholder } from '@/components/studio/activity-placeholder';
 import { NowPlayingBar } from '@/components/studio/now-playing-bar';
+import { OfflineBanner } from '@/components/studio/offline-banner';
 import { RatingCard } from '@/components/studio/rating-card';
 import { RatingFilter, type Filter } from '@/components/studio/rating-filter';
 import { useTickingNow } from '@/components/now-playing/use-ticking-now';
@@ -20,6 +21,7 @@ export default function TickerScreen() {
   return (
     <AreaScreen area="studio">
       <NowPlayingBar />
+      <OfflineBanner />
       <ActivityPlaceholder />
       <RatingFilter ratings={ratings} selected={filter} onSelect={setFilter} />
       <FlatList

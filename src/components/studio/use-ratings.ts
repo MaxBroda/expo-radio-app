@@ -8,7 +8,10 @@ export function useRatings() {
   const [ratings, setRatings] = useState<Rating[]>([]);
 
   useEffect(() => {
-    feedbackHub.list().then((list) => setRatings(list));
+    feedbackHub.list().then(
+      (list) => setRatings(list),
+      () => {},
+    );
   }, [feedbackHub]);
 
   return ratings;

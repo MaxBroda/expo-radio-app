@@ -1,5 +1,6 @@
 import { AreaScreen } from '@/components/area-screen';
 import { NowPlayingBar } from '@/components/studio/now-playing-bar';
+import { OfflineBanner } from '@/components/studio/offline-banner';
 import { useWishes } from '@/components/studio/use-wishes';
 import { WishCard } from '@/components/studio/wish-card';
 import { WishSort, type Sort } from '@/components/studio/wish-sort';
@@ -23,6 +24,7 @@ export default function WishesScreen() {
   return (
     <AreaScreen area="studio">
       <NowPlayingBar />
+      <OfflineBanner />
       <WishSummary wishes={wishes} />
       <WishSort selected={sort} onSelect={setSort} />
       <FlatList

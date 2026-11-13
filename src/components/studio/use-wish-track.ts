@@ -9,7 +9,10 @@ export function useWishTrack(song: WishedSong) {
 
   useEffect(() => {
     if (song.kind !== 'catalog') return;
-    musicDatabase.lookup(song.trackId).then((found) => setTrack(found));
+    musicDatabase.lookup(song.trackId).then(
+      (found) => setTrack(found),
+      () => {},
+    );
   }, [musicDatabase, song]);
 
   return track;

@@ -8,13 +8,19 @@ export function useWishes() {
   const [wishes, setWishes] = useState<Wish[]>([]);
 
   useEffect(() => {
-    wishSystem.list().then((list) => setWishes(list));
+    wishSystem.list().then(
+      (list) => setWishes(list),
+      () => {},
+    );
   }, [wishSystem]);
 
   function setStatus(id: WishId, status: WishStatus) {
-    wishSystem.setStatus(id, status).then((updated) => {
-      setWishes((list) => list.map((wish) => (wish.id === updated.id ? updated : wish)));
-    });
+    wishSystem.setStatus(id, status).then(
+      (updated) => {
+        setWishes((list) => list.map((wish) => (wish.id === updated.id ? updated : wish)));
+      },
+      () => {},
+    );
   }
 
   return { wishes, setStatus };
