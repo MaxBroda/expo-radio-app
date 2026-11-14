@@ -9,9 +9,12 @@ export function useSubjectName(subject: RatingSubject) {
 
   useEffect(() => {
     if (subject.kind !== 'track') return;
-    musicDatabase.lookup(subject.trackId).then((track) => {
-      if (track) setTrackName(`${track.title} — ${track.artist}`);
-    });
+    musicDatabase.lookup(subject.trackId).then(
+      (track) => {
+        if (track) setTrackName(`${track.title} — ${track.artist}`);
+      },
+      () => {},
+    );
   }, [musicDatabase, subject]);
 
   // TO-DO: implement station system that offers show & moderator
