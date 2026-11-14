@@ -1,13 +1,17 @@
-import { NotImplementedError } from '@/domain/errors';
 import type { StudioEvent } from '@/domain/studio-event';
 import type { NotificationService, Unsubscribe } from '@/ports/notification-service';
 
 export class StubNotificationService implements NotificationService {
-  async notifyModerator(_event: StudioEvent): Promise<void> {
-    throw new NotImplementedError('NotificationService.notifyModerator');
+  private handlers: ((event: StudioEvent) => void)[] = [];
+
+  async notifyModerator(event: StudioEvent): Promise<void> {
+    this.handlers.forEach((handler) => handler(event));
   }
 
-  subscribe(_handler: (event: StudioEvent) => void): Unsubscribe {
-    throw new NotImplementedError('NotificationService.subscribe');
+  subscribe(handler: (event: StudioEvent) => void): Unsubscribe {
+    this.handlers.push(handler);
+    return () => {
+      this.handlers = this.handlers.filter((other) => other !== handler);
+    };
   }
 }

@@ -1,3 +1,4 @@
+import { NotifyingFeedbackHub, NotifyingWishSystem } from '@/adapters/notifying-stations';
 import { StubFeedbackHub } from '@/adapters/stub/stub-feedback-hub';
 import { StubMusicDatabase } from '@/adapters/stub/stub-music-database';
 import { StubNotificationService } from '@/adapters/stub/stub-notification-service';
@@ -35,16 +36,22 @@ export function createStubStations(
   clock = new DemoClock(demoMoment(schedule.slot('feierabend'))),
 ): Stations {
   const playout = new StubPlayout({ now: context.now, flags: context.flags });
-  const feedbackHub = new StubFeedbackHub(clock, { get: context.flags });
   const notifications = new StubNotificationService();
+  const feedbackHub = new NotifyingFeedbackHub(
+    new StubFeedbackHub(clock, { get: context.flags }),
+    notifications,
+  );
   const musicDatabase = new StubMusicDatabase({
     connection: () => context.flags().connection,
   });
-  const wishSystem = new StubWishSystem({
-    now: context.now,
-    flags: context.flags,
-    demoClock: clock,
-  });
+  const wishSystem = new NotifyingWishSystem(
+    new StubWishSystem({
+      now: context.now,
+      flags: context.flags,
+      demoClock: clock,
+    }),
+    notifications,
+  );
 
   return { playout, musicDatabase, feedbackHub, wishSystem, notifications };
 }
